@@ -92,7 +92,7 @@ export const StaffAttendancePage: React.FC = () => {
 
   // Filter Bar state
   const [selectedBranchId, setSelectedBranchId] = useState<string>(
-    isSuperAdmin ? (activeBranchId !== 'ALL' ? activeBranchId : allBranches[0]?.id || '') : (user.branchId || '')
+    isSuperAdmin ? '' : (user.branchId || '')
   );
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [attendanceType, setAttendanceType] = useState<string>('NORMAL');
@@ -274,6 +274,7 @@ export const StaffAttendancePage: React.FC = () => {
 
   // Handler: Manual Filter Button Click
   const handleApplyFilter = () => {
+    if (!effectiveBranchId) { toast.error('Please select a branch for this action.'); return; }
     setHasFiltered(true);
     loadAttendanceData(effectiveBranchId, selectedDate);
   };
@@ -408,6 +409,7 @@ export const StaffAttendancePage: React.FC = () => {
 
   // Handler: Save Attendance (Sends daily sheet to real backend DB)
   const handleSaveAttendance = async () => {
+    if (!effectiveBranchId) { toast.error('Please select a branch for this action.'); return; }
     // Only send rows that have been given a valid status
     const validRows = rows.filter((r) => r.status !== 'SELECT_STATUS');
     if (validRows.length === 0) {
@@ -552,6 +554,7 @@ export const StaffAttendancePage: React.FC = () => {
                   onChange={(e) => setSelectedBranchId(e.target.value)}
                   className="w-full h-9 text-xs border border-slate-300 rounded-lg px-3 bg-white text-slate-800 font-medium focus:ring-1 focus:ring-[#0047AB] focus:border-[#0047AB] transition-colors appearance-none cursor-pointer disabled:bg-slate-50 disabled:text-slate-500"
                 >
+                  <option value="">Select branch</option>
                   {allBranches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
@@ -926,7 +929,7 @@ export const StaffAttendancePage: React.FC = () => {
       {/* ── MODAL: FINALIZE DAY (EOD) ───────────────────────────────────────── */}
       {showFinalizeModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 border border-slate-200">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 border border-slate-200 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="flex items-center gap-3 text-emerald-600 mb-2">
               <ShieldCheck className="w-6 h-6" />
               <h3 className="font-bold text-slate-900 text-sm">Finalize Day Attendance</h3>
@@ -960,7 +963,7 @@ export const StaffAttendancePage: React.FC = () => {
       {/* ── MODAL: BIOMETRIC CSV IMPORT ─────────────────────────────────────── */}
       {showImportModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 border border-slate-200">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-5 border border-slate-200 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
                 <Upload className="w-4 h-4 text-[#0047AB]" />

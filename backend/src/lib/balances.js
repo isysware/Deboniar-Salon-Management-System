@@ -7,27 +7,27 @@ import { toDec } from './money.js';
 
 /**
  * @param {string[]} accountIds
- * @param {{ asOf?: Date, tx?: object }} [opts]  asOf = only movements strictly before this instant
+ * @param {{ asOf?: Date, branchIds?: string[], tx?: object }} [opts]  asOf = only movements strictly before this instant
  * @returns {Promise<Map<string, import('decimal.js').Decimal>>} accountId → balance
  */
-export const accountBalances = async (accountIds, { asOf, tx = prisma } = {}) => {
+export const accountBalances = async (accountIds, { asOf, branchIds, tx = prisma } = {}) => {
   const result = new Map();
   if (!accountIds.length) return result;
 
   const accounts = await tx.paymentAccount.findMany({
     where:  { id: { in: accountIds } },
-    select: { id: true, openingBalance: true },
+    select: { id: true, branchId: true, openingBalance: true },
   });
   const sums = await tx.accountMovement.groupBy({
     by:    ['accountId', 'direction'],
-    where: { accountId: { in: accountIds }, ...(asOf ? { createdAt: { lt: asOf } } : {}) },
+    where: { ...(branchIds ? { branchId: { in: branchIds } } : {}), accountId: { in: accountIds }, ...(asOf ? { createdAt: { lt: asOf } } : {}) },
     _sum:  { amount: true },
   });
 
   for (const a of accounts) {
     const inSum = sums.find((s) => s.accountId === a.id && s.direction === 'IN')?._sum.amount ?? 0;
     const outSum = sums.find((s) => s.accountId === a.id && s.direction === 'OUT')?._sum.amount ?? 0;
-    result.set(a.id, toDec(a.openingBalance).plus(toDec(inSum)).minus(toDec(outSum)));
+    result.set(a.id, toDec(!branchIds || branchIds.includes(a.branchId) ? a.openingBalance : 0).plus(toDec(inSum)).minus(toDec(outSum)));
   }
   return result;
 };

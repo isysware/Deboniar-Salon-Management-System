@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { salonService } from '@/services';
@@ -41,10 +41,17 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   const [selectedBranchId, setSelectedBranchId] = useState<string>(
-    defaultBranchId || (isSuperAdmin ? (activeBranchId || 'ALL') : (user?.branchId || ''))
+    isSuperAdmin ? '' : (user?.branchId || '')
   );
   const [resetConfirmationText, setResetConfirmationText] = useState('');
   const [isResetting, setIsResetting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedBranchId(isSuperAdmin ? '' : (user?.branchId || ''));
+      setResetConfirmationText('');
+    }
+  }, [isOpen, isSuperAdmin, user?.branchId]);
 
   // Cleanup options
   const [wipeClients, setWipeClients] = useState(true);
@@ -54,6 +61,10 @@ export const ResetDataModal: React.FC<ResetDataModalProps> = ({
   const [wipeStaff, setWipeStaff] = useState(false);
 
   const handleExecuteReset = async () => {
+    if (!selectedBranchId || (selectedBranchId !== 'ALL' && !allBranches.some((branch) => branch.id === selectedBranchId))) {
+      toast.error('Please select the branch to reset.');
+      return;
+    }
     if (resetConfirmationText.trim().toUpperCase() !== 'RESET') {
       toast.error('Please type "RESET" in capital letters to confirm.');
       return;

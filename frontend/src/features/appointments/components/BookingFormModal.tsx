@@ -64,8 +64,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
   // Branch
   const [selectedBranchId, setSelectedBranchId] = useState<string>(() => {
     if (appointmentToEdit?.branchId) return appointmentToEdit.branchId;
-    if (activeBranchId && activeBranchId !== 'ALL') return activeBranchId;
-    return branches[0]?.id || '';
+    return user?.role === 'SUPER_ADMIN' ? '' : (user?.branchId || activeBranchId);
   });
 
   // Client Selection State
@@ -202,6 +201,7 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
         ]);
       }
     } else {
+      setSelectedBranchId(user?.role === 'SUPER_ADMIN' ? '' : (user?.branchId || activeBranchId));
       setDate(initialDate || new Date().toISOString().slice(0, 10));
       setStartTime('10:00 AM');
       setClientName('');
@@ -390,6 +390,12 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
   // Form Submit Handler
   const handleSubmit = async (targetStatus: 'PENDING' | 'CONFIRMED') => {
     setFormError(null);
+
+    if (!selectedBranchId || !branches.some((branch) => branch.id === selectedBranchId)) {
+      setFormError('Please select a branch for this appointment.');
+      toast.error('Please select a branch for this appointment.');
+      return;
+    }
 
     // 1. Customer validation
     const name = clientName.trim();
@@ -689,9 +695,16 @@ export const BookingFormModal: React.FC<BookingFormModalProps> = ({
                   onChange={(e) => {
                     setSelectedBranchId(e.target.value);
                     setSelectedItems([]);
+                    setSelectedClient(null);
+                    setClientSearchQuery('');
+                    setMatchingClients([]);
+                    setBranchStaff([]);
+                    setBranchServices([]);
+                    setBranchPackages([]);
                   }}
                   className="w-full mt-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-800 disabled:opacity-70 h-9"
                 >
+                  <option value="">Select branch for this appointment</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}

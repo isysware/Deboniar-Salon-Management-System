@@ -803,7 +803,7 @@ export const ManualOvertimePage: React.FC = () => {
       {/* MODAL 1: ADD MANUAL OVERTIME */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-x-hidden overflow-y-auto animate-in fade-in zoom-in-95 duration-150 max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-slate-900 text-lg">Log Manual Overtime</h3>
@@ -940,7 +940,7 @@ export const ManualOvertimePage: React.FC = () => {
       {/* MODAL 2: EDIT OVERTIME */}
       {showEditModal && activeRecord && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-lg overflow-x-hidden overflow-y-auto animate-in fade-in zoom-in-95 duration-150 max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-slate-900 text-lg">Edit Overtime Entry</h3>
@@ -1011,7 +1011,7 @@ export const ManualOvertimePage: React.FC = () => {
       {/* MODAL 3: APPROVE OVERTIME */}
       {showApproveModal && activeRecord && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-x-hidden overflow-y-auto animate-in fade-in zoom-in-95 duration-150 max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-slate-900 text-lg">Approve Overtime Voucher</h3>
@@ -1081,7 +1081,7 @@ export const ManualOvertimePage: React.FC = () => {
       {/* MODAL 4: REJECT OVERTIME */}
       {showRejectModal && activeRecord && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-x-hidden overflow-y-auto animate-in fade-in zoom-in-95 duration-150 max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-slate-900 text-lg">Reject Overtime Voucher</h3>
@@ -1133,7 +1133,7 @@ export const ManualOvertimePage: React.FC = () => {
       {/* MODAL 5: CANCEL OVERTIME */}
       {showCancelModal && activeRecord && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-md overflow-x-hidden overflow-y-auto animate-in fade-in zoom-in-95 duration-150 max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h3 className="font-bold text-slate-900 text-lg">Cancel Approved Overtime</h3>
@@ -1189,7 +1189,7 @@ export const ManualOvertimePage: React.FC = () => {
       {/* MODAL 6: PRINT OVERTIME AUDIT */}
       {showPrintModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-3xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-3xl overflow-x-hidden overflow-y-auto animate-in fade-in zoom-in-95 duration-150 max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between print:hidden">
               <span className="font-bold text-slate-900 text-sm">Print Overtime Audit Sheet</span>
               <div className="flex items-center gap-2">

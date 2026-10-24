@@ -804,7 +804,7 @@ export const AccountSettlementPage: React.FC = () => {
       {/* Admin Approve Modal */}
       {isApproveModalOpen && selectedSettlement && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <h3 className="text-base font-bold text-slate-900 mb-2">Approve Settlement</h3>
             <p className="text-xs text-slate-500 mb-4">
               Confirm cash handover from {selectedSettlement.submittedByName} for settlement #{selectedSettlement.settlementNumber}.
@@ -850,7 +850,7 @@ export const AccountSettlementPage: React.FC = () => {
       {/* Admin Reject Modal */}
       {isRejectModalOpen && selectedSettlement && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <h3 className="text-base font-bold text-rose-700 mb-2">Reject Settlement</h3>
             <p className="text-xs text-slate-500 mb-4">
               Return settlement #{selectedSettlement.settlementNumber} to cashier for recount or correction.
@@ -887,7 +887,7 @@ export const AccountSettlementPage: React.FC = () => {
       {/* View Settlement Modal */}
       {isViewModalOpen && selectedSettlement && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl">
+          <div className="bg-white rounded-xl max-w-md w-full p-5 shadow-xl max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between mb-4 border-b pb-2">
               <h3 className="text-sm font-bold text-slate-900">
                 Settlement Details ({selectedSettlement.settlementNumber})

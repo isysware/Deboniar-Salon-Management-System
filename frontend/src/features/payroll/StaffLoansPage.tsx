@@ -20,7 +20,7 @@ export const StaffLoansPage: React.FC = () => {
   }
 
   const [selectedBranchId, setSelectedBranchId] = useState<string>(
-    user.role === 'SUPER_ADMIN' ? (activeBranchId === 'ALL' ? (allBranches[0]?.id || '') : activeBranchId) : (user.branchId || '')
+    user.role === 'SUPER_ADMIN' ? '' : (user.branchId || '')
   );
   const branchId = user.role === 'SUPER_ADMIN' ? selectedBranchId : (user.branchId || activeBranchId);
   const month = (demoDate || new Date().toISOString().slice(0, 10)).slice(0, 7);
@@ -75,6 +75,7 @@ export const StaffLoansPage: React.FC = () => {
           <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5">
             <Building2 className="w-4 h-4 text-slate-400" />
             <select className="bg-transparent text-xs font-semibold text-slate-800 outline-none" value={selectedBranchId} onChange={(e) => setSelectedBranchId(e.target.value)}>
+              <option value="">Select branch</option>
               {allBranches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
           </div>

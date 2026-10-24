@@ -40,7 +40,7 @@ export const computeBranchMetrics = async (branchIds, date, { id, name, code }) 
     prisma.attendanceRecord.count({ where: { ...scope, workDate: day, status: { in: ON_DUTY } } }),
     prisma.appointment.count({ where: { ...scope, date: day } }),
     prisma.cashDrawer.findMany({ where: { ...scope, kind: 'DRAWER', status: { in: ['OPEN', 'SETTLEMENT_PENDING'] } } }),
-    prisma.paymentAccount.findMany({ where: scope, select: { id: true } }),
+    prisma.paymentAccount.findMany({ where: { OR: [scope, { branches: { some: { id: scope.branchId } } }] }, select: { id: true } }),
   ]);
 
   const netReversed = refunds.reduce((s, r) => s.plus(toDec(r.netReversed)), toDec(0));
@@ -63,7 +63,7 @@ export const computeBranchMetrics = async (branchIds, date, { id, name, code }) 
   const actualCollections = cashCollected.plus(onlineCollected);
   const totalExpensesPaid = sumOf(expenses, 'amount').minus(sumOf(reversals, 'amount'));
   const custody = (await drawerDTOs(prisma, drawers)).reduce((s, d) => s.plus(d.expectedInDrawer), toDec(0));
-  const balances = await accountBalances(accounts.map((a) => a.id));
+  const balances = await accountBalances(accounts.map((a) => a.id), { branchIds });
   const onlineBalancesTotal = [...balances.values()].reduce((s, b) => s.plus(b), toDec(0));
 
   return {
@@ -175,7 +175,7 @@ export const superAdminDashboard = async (actor, { branchId = 'ALL' } = {}) => {
   const [metrics, branchStats, accounts, todayAppointments, invoices, drawers, pending, totalClientsCount, totalServicesCount, totalAppointmentsCount, staffList, revenueTrend, categoryBreakdown] = await Promise.all([
     computeBranchMetrics(ids, date, label),
     Promise.all(active.map((b) => metricsFor(b, date))),
-    prisma.paymentAccount.findMany({ where: scope, orderBy: { createdAt: 'asc' } }),
+    prisma.paymentAccount.findMany({ where: { OR: [scope, { branches: { some: { id: scope.branchId } } }] }, orderBy: { createdAt: 'asc' } }),
     listAppointments(actor, { ...(isConsolidated ? {} : { branchId }), date }),
     recentInvoices(scope),
     prisma.cashDrawer.findMany({ where: { ...scope, kind: 'DRAWER' }, orderBy: { createdAt: 'desc' } }),
@@ -187,7 +187,7 @@ export const superAdminDashboard = async (actor, { branchId = 'ALL' } = {}) => {
     computeRevenueTrend(scope),
     computeCategoryBreakdown(scope),
   ]);
-  const balances = await accountBalances(accounts.map((a) => a.id));
+  const balances = await accountBalances(accounts.map((a) => a.id), { branchIds: ids });
 
   return {
     isConsolidated, activeBranchId: branchId, activeBranchName: label.name,
@@ -235,7 +235,7 @@ export const adminDashboard = async (actor, { branchId } = {}) => {
     prisma.expense.findMany({ where: scope, orderBy: [{ expenseDate: 'desc' }, { createdAt: 'desc' }], take: 5 }),
     prisma.settlement.findMany({ where: { ...scope, status: 'SUBMITTED' }, orderBy: { createdAt: 'asc' } }),
     prisma.invoice.count({ where: { ...scope, lifecycle: { not: 'VOIDED' }, status: { in: ['UNPAID', 'PARTIAL'] } } }),
-    prisma.paymentAccount.findMany({ where: scope, orderBy: { createdAt: 'asc' } }),
+    prisma.paymentAccount.findMany({ where: { OR: [scope, { branches: { some: { id: scope.branchId } } }] }, orderBy: { createdAt: 'asc' } }),
     prisma.cashDrawer.findMany({ where: { ...scope, kind: 'DRAWER' }, orderBy: { createdAt: 'desc' } }),
     prisma.client.count({ where: scope }),
     prisma.service.count({ where: { ...scope, isActive: true } }),
@@ -244,7 +244,7 @@ export const adminDashboard = async (actor, { branchId } = {}) => {
     computeRevenueTrend(scope),
     computeCategoryBreakdown(scope),
   ]);
-  const balances = await accountBalances(accounts.map((a) => a.id));
+  const balances = await accountBalances(accounts.map((a) => a.id), { branchIds: [branch.id] });
   const names = await prisma.staff.findMany({ where: { id: { in: present.map((p) => p.staffId) } }, select: { name: true } });
   const staffAttendanceSummary = { presentCount: present.length, totalCount, onDutyStaffNames: names.map((s) => s.name) };
 

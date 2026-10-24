@@ -1,3 +1,4 @@
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { salonService, LedgerMovement, GeneralLedgerSummary } from '@/services';
@@ -24,6 +25,8 @@ import {
 export const GeneralLedgerPage: React.FC = () => {
   const { user, activeBranchId, allBranches } = useAuth();
 
+  const [selectedBranchId, setSelectedBranchId] = useState('ALL');
+
   // Filters state
   const [channel, setChannel] = useState<'ALL' | 'CASH' | 'BANK'>('ALL');
   const [direction, setDirection] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
@@ -41,7 +44,7 @@ export const GeneralLedgerPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const effectiveBranchId = user?.role === 'SUPER_ADMIN' ? activeBranchId : user?.branchId;
+  const effectiveBranchId = user?.role === 'SUPER_ADMIN' ? selectedBranchId : user?.branchId;
 
   const loadLedger = async () => {
     setIsLoading(true);
@@ -108,6 +111,10 @@ export const GeneralLedgerPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {user?.role === 'SUPER_ADMIN' && <Select value={selectedBranchId} onValueChange={(id) => { setSelectedBranchId(id); setPage(1); }}>
+            <SelectTrigger aria-label="Filter ledger by branch" className="w-48 text-xs"><SelectValue placeholder="All branches" /></SelectTrigger>
+            <SelectContent><SelectItem value="ALL">All Branches</SelectItem>{allBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>)}</SelectContent>
+          </Select>}
           <Button
             variant="outline"
             size="sm"

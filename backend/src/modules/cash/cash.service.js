@@ -126,12 +126,12 @@ export const postAccountMovement = async (tx, m) => {
   if (amount.lessThanOrEqualTo(0)) throw badRequest('INVALID_AMOUNT', 'Account movement amount must be positive.');
 
   await tx.$executeRaw`SELECT 1 FROM "PaymentAccount" WHERE id = ${m.accountId} FOR UPDATE`;
-  const account = await tx.paymentAccount.findUnique({ where: { id: m.accountId } });
-  if (!account || account.branchId !== m.branchId || !account.isActive) {
+  const account = await tx.paymentAccount.findUnique({ where: { id: m.accountId }, include: { branches: true } });
+  if (!account || (account.branchId !== m.branchId && !account.branches.some((b) => b.id === m.branchId)) || !account.isActive) {
     throw badRequest('ACCOUNT_INVALID', `Payment account '${m.accountId}' is invalid or deactivated for this branch.`);
   }
   if (m.direction === 'OUT') {
-    const balance = await accountBalance(account.id, { tx });
+    const balance = await accountBalance(account.id, { tx, branchIds: [m.branchId] });
     if (balance.lessThan(amount)) {
       throw conflict(
         'INSUFFICIENT_ACCOUNT_BALANCE',
@@ -141,7 +141,7 @@ export const postAccountMovement = async (tx, m) => {
   }
   const movement = await tx.accountMovement.create({
     data: {
-      accountId: account.id, branchId: account.branchId, type: m.type, direction: m.direction, amount,
+      accountId: account.id, branchId: m.branchId, type: m.type, direction: m.direction, amount,
       ...(m.transactionDate ? { createdAt: new Date(m.transactionDate.toISOString().slice(0, 10) + "T12:00:00+05:00") } : {}),
       sourceModule: m.sourceModule, sourceId: m.sourceId ?? null, reference: m.reference ?? null,
       description: m.description ?? null, userId: m.actor.id, userName: m.actor.name,
@@ -254,13 +254,14 @@ export const vaultStatus = async (actor, branchId) => {
 
 /** Bank/online account statement: opening, every movement with running balance, closing. */
 export const accountStatement = async (actor, accountId, { from, to } = {}) => {
-  const account = await prisma.paymentAccount.findUnique({ where: { id: accountId } });
+  const account = await prisma.paymentAccount.findUnique({ where: { id: accountId }, include: { branches: true } });
   if (!account) throw notFound('ACCOUNT_NOT_FOUND', `Payment account '${accountId}' not found.`);
-  assertBranchAccess(actor, account.branchId);
+  const branchId = actor.role === 'SUPER_ADMIN' ? null : actor.branchId;
+  if (branchId && account.branchId !== branchId && !account.branches.some((b) => b.id === branchId)) throw forbidden('BRANCH_FORBIDDEN', 'Cannot access another branch account.');
 
-  const opening = from ? await accountBalance(accountId, { asOf: from }) : toDec(account.openingBalance);
+  const opening = from ? await accountBalance(accountId, { asOf: from, ...(branchId ? { branchIds: [branchId] } : {}) }) : toDec(!branchId || branchId === account.branchId ? account.openingBalance : 0);
   const movements = await prisma.accountMovement.findMany({
-    where: { accountId, ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) },
+    where: { accountId, ...(branchId ? { branchId } : {}), ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) },
     orderBy: { createdAt: 'asc' },
   });
   let running = opening;
@@ -269,7 +270,7 @@ export const accountStatement = async (actor, accountId, { from, to } = {}) => {
     return toAccountMovementDTO(m, running, account.name);
   });
   return {
-    accountId, accountName: account.name, branchId: account.branchId,
+    accountId, accountName: account.name, branchId: branchId ?? account.branchId,
     openingBalance: opening.toNumber(), closingBalance: running.toNumber(),
     moneyIn: rows.filter((r) => r.direction === 'IN').reduce((s, r) => s + r.amount, 0),
     moneyOut: rows.filter((r) => r.direction === 'OUT').reduce((s, r) => s + r.amount, 0),

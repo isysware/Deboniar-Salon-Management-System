@@ -74,6 +74,7 @@ export const toDrawerMovementDTO = (m, running) => ({
 });
 
 export const toAccountMovementDTO = (m, running, accountName) => ({
+  branchId: m.branchId,
   id:             m.id,
   accountId:      m.accountId,
   accountName,

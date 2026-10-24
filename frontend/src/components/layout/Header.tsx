@@ -18,7 +18,6 @@ import {
   Lock,
   LogOut,
   User,
-  Check,
   PanelLeftClose,
   PanelLeft,
   Calendar,
@@ -40,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobileDrawer,
   breadcrumbs,
 }) => {
-  const { user, activeBranchId, allBranches, switchBranch, logout, demoDate, setDemoDate } = useAuth();
+  const { user, activeBranchId, allBranches, logout, demoDate, setDemoDate } = useAuth();
   const { navigate } = useRouter();
 
   const [notifications, setNotifications] = useState<Array<{
@@ -189,83 +188,8 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         )}
 
-        {/* BRANCH SELECTOR using shadcn DropdownMenu for Super Admin */}
-        <div>
-          {isSuperAdmin ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-slate-100 text-xs font-medium text-slate-800 transition-colors cursor-pointer outline-none focus:ring-2 focus:ring-[#2254E1]/20"
-                >
-                  <Building2 className="w-3.5 h-3.5 text-[#2254E1]" />
-                  <span className="hidden sm:inline font-semibold">
-                    {activeBranchId === 'ALL'
-                      ? 'All Branches'
-                      : allBranches.find((b) => b.id === activeBranchId)?.name || 'Branch'}
-                  </span>
-                  <span className="sm:hidden font-semibold">
-                    {activeBranchId === 'ALL'
-                      ? 'All'
-                      : allBranches.find((b) => b.id === activeBranchId)?.code || 'Branch'}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-              </DropdownMenuTrigger>
+        {!isSuperAdmin && (
 
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel className="text-[11px] text-slate-500 font-medium">
-                  Select Active Branch Scope
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-
-                {/* Consolidated Option */}
-                <DropdownMenuItem
-                  onClick={() => switchBranch('ALL')}
-                  className={`flex items-center justify-between cursor-pointer py-2 ${activeBranchId === 'ALL' ? 'bg-blue-50/70 text-[#2254E1] font-semibold' : ''
-                    }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1 rounded bg-blue-100 text-[#2254E1]">
-                      <Building2 className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-xs">All Branches (Consolidated)</p>
-                      <p className="text-[10px] text-slate-400 font-normal">Aggregated multi-branch metrics</p>
-                    </div>
-                  </div>
-                  {activeBranchId === 'ALL' && <Check className="w-4 h-4 text-[#2254E1]" />}
-                </DropdownMenuItem>
-
-                <DropdownMenuSeparator />
-
-                {/* Individual Branches */}
-                {allBranches.map((branch) => {
-                  const isSelected = activeBranchId === branch.id;
-                  return (
-                    <DropdownMenuItem
-                      key={branch.id}
-                      onClick={() => switchBranch(branch.id)}
-                      className={`flex items-center justify-between cursor-pointer py-2 ${isSelected ? 'bg-blue-50/70 text-[#2254E1] font-semibold' : ''
-                        }`}
-                    >
-                      <div>
-                        <p className="font-medium text-xs flex items-center gap-1.5">
-                          <span>{branch.name}</span>
-                          <span className="text-[10px] px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded">
-                            {branch.code}
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-slate-400 font-normal">{branch.city}</p>
-                      </div>
-                      {isSelected && <Check className="w-4 h-4 text-[#2254E1]" />}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            /* Non-SuperAdmin Fixed Branch Badge */
             <div
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-700"
               title="Your assigned branch is fixed by your role permissions."
@@ -279,8 +203,8 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
               <Lock className="w-3 h-3 text-slate-400 ml-0.5" />
             </div>
-          )}
-        </div>
+        )}
+
 
         {/* NOTIFICATIONS BELL DROPDOWN */}
         {(user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN' || user?.role === 'ACCOUNTANT') && (

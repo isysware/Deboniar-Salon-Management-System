@@ -91,7 +91,7 @@ import {
 } from 'lucide-react';
 
 export const POSBillingPage: React.FC = () => {
-  const { user, activeBranchId, allBranches, switchBranch, demoDate } = useAuth();
+  const { user, activeBranchId, allBranches, demoDate } = useAuth();
 
   // 1. Role Guard: Super Admin, Admin, and Accountant
   if (!user || user.role === 'STAFF') {
@@ -102,17 +102,17 @@ export const POSBillingPage: React.FC = () => {
 
   // Branch Scope
   const currentSelectedBranchId = isSuperAdmin
-    ? (activeBranchId !== 'ALL' ? activeBranchId : allBranches[0]?.id || '')
+    ? (allBranches[0]?.id || '')
     : (user.branchId as string);
 
   const [selectedBranchId, setSelectedBranchId] = useState<string>(currentSelectedBranchId);
 
-  // Sync when activeBranchId changes
+  // Branches may arrive after this page mounts; keep the POS selection local.
   useEffect(() => {
-    if (isSuperAdmin && activeBranchId !== 'ALL') {
-      setSelectedBranchId(activeBranchId);
+    if (isSuperAdmin && !selectedBranchId && allBranches.length > 0) {
+      setSelectedBranchId(allBranches[0].id);
     }
-  }, [activeBranchId, isSuperAdmin]);
+  }, [isSuperAdmin, selectedBranchId, allBranches]);
 
   // Data collections
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
@@ -225,7 +225,9 @@ export const POSBillingPage: React.FC = () => {
   const [acknowledgedPriceDiscrepancy, setAcknowledgedPriceDiscrepancy] = useState(false);
 
   // Load branch data
+  const branchLoadRevision = useRef(0);
   const loadBranchData = async (bId: string) => {
+    const revision = ++branchLoadRevision.current;
     setIsLoading(true);
     try {
       const [branchList, srvList, pkgList, stfList, accList, prodList, batchList] = await Promise.all([
@@ -238,6 +240,7 @@ export const POSBillingPage: React.FC = () => {
         salonService.getInventoryBatches(bId, undefined, user),
       ]);
 
+      if (revision !== branchLoadRevision.current) return;
       const br = branchList.find((b) => b.id === bId) || null;
       setCurrentBranch(br);
       // Filter active items for POS catalogue
@@ -277,7 +280,7 @@ export const POSBillingPage: React.FC = () => {
     } catch (err) {
       console.error('Failed to load POS data:', err);
     } finally {
-      setIsLoading(false);
+      if (revision === branchLoadRevision.current) setIsLoading(false);
     }
   };
 
@@ -307,7 +310,7 @@ export const POSBillingPage: React.FC = () => {
     const appointmentIdParam = params.get('appointmentId');
     const clientIdParam = params.get('clientId');
 
-    if (appointmentIdParam) {
+    if (appointmentIdParam && selectedBranchId) {
       salonService.getAppointment(appointmentIdParam, user).then((appt) => {
         if (appt) {
           if (appt.billingStatus === 'BILLED') {
@@ -319,7 +322,8 @@ export const POSBillingPage: React.FC = () => {
       });
     } else if (clientIdParam && selectedBranchId) {
       salonService.getClient(clientIdParam, user).then((cl) => {
-        if (cl) handleSelectClient(cl);
+        if (cl?.branchId === selectedBranchId) handleSelectClient(cl);
+        else if (cl) toast.error('Select the customer branch before opening their sale.');
       });
     }
   }, [selectedBranchId, services.length, packages.length]);
@@ -1122,6 +1126,10 @@ export const POSBillingPage: React.FC = () => {
 
   // Open Appointment in POS
   const handleOpenAppointmentInPOS = (appt: Appointment, forceReplace = false) => {
+    if (!selectedBranchId || appt.branchId !== selectedBranchId) {
+      toast.error('Select the appointment branch before opening it in POS.');
+      return;
+    }
     if (cart.length > 0 && !forceReplace) {
       setPendingAppointmentToLoad(appt);
       setIsCartOverwritePromptOpen(true);
@@ -1712,7 +1720,7 @@ export const POSBillingPage: React.FC = () => {
 
     const customService: ServiceItem = {
       id: `custom-${Date.now()}`,
-      branchId: activeBranchId,
+      branchId: selectedBranchId,
       name: name.trim(),
       code: 'CUST-01',
       category: 'Custom Service',
@@ -2448,8 +2456,16 @@ export const POSBillingPage: React.FC = () => {
             <Select
               value={selectedBranchId}
               onValueChange={(val) => {
+                if (val === selectedBranchId) return;
+                handleClearCart();
+                setSelectedClientId(undefined);
+                setClientName('');
+                setClientPhone('');
+                setSelectedOnlineAccountId('');
+                setCollectionOnlineAccountId('');
+                setCurrentBranch(null);
                 setSelectedBranchId(val);
-                switchBranch(val);
+
               }}
             >
               <SelectTrigger className="w-36 text-xs h-8.5 font-semibold bg-slate-50 border-slate-200 rounded-xl">
@@ -3455,7 +3471,7 @@ export const POSBillingPage: React.FC = () => {
         onClose={() => setIsClientModalOpen(false)}
         onSuccess={handleClientCreated}
         activeBranchId={selectedBranchId}
-        branches={allBranches}
+        branches={allBranches.filter((branch) => branch.id === selectedBranchId)}
         initialName={clientModalPrefill.name}
         initialPhone={clientModalPrefill.phone}
       />

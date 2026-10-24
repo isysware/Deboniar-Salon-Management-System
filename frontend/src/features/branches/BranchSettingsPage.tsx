@@ -1,3 +1,4 @@
+import { BranchActionField } from '@/components/BranchActionField';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
@@ -48,6 +49,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -66,6 +68,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Building2,
+  ChevronDown,
   CreditCard,
   Wallet,
   Smartphone,
@@ -98,9 +101,11 @@ export const BranchSettingsPage: React.FC = () => {
 
   const isSuperAdmin = user.role === 'SUPER_ADMIN';
 
+  const [creationBranchIds, setCreationBranchIds] = useState<string[]>([]);
+
   // Branch context
   const initialBranchId = isSuperAdmin
-    ? (activeBranchId !== 'ALL' ? activeBranchId : allBranches[0]?.id || '')
+    ? ''
     : (user.branchId as string);
 
   const getTabFromPath = (path: string): 'SALON_PROFILE' | 'PAYMENT_ACCOUNTS' | 'TAX_SETTINGS' | 'DATA_RESET' | 'DEVICE_INTEGRATION' => {
@@ -222,8 +227,8 @@ export const BranchSettingsPage: React.FC = () => {
     try {
       const [branch, accounts, rules] = await Promise.all([
         salonService.getBranch(selectedBranchId),
-        salonService.getPaymentAccounts(selectedBranchId),
-        salonService.getTaxRules(selectedBranchId),
+        isSuperAdmin ? salonService.getPaymentAccounts(selectedBranchId) : Promise.resolve([]),
+        isSuperAdmin ? salonService.getTaxRules(selectedBranchId) : Promise.resolve([]),
       ]);
       setCurrentBranch(branch);
       setPaymentAccounts(accounts);
@@ -347,15 +352,6 @@ export const BranchSettingsPage: React.FC = () => {
     loadBranchSettings();
   }, [selectedBranchId]);
 
-  // Keep branch in sync if activeBranchId changes for Super Admin or when branches load
-  useEffect(() => {
-    if (isSuperAdmin && activeBranchId !== 'ALL' && activeBranchId !== selectedBranchId) {
-      setSelectedBranchId(activeBranchId);
-    } else if (!selectedBranchId && allBranches.length > 0) {
-      setSelectedBranchId(allBranches[0].id);
-    }
-  }, [activeBranchId, isSuperAdmin, selectedBranchId, allBranches]);
-
   // Filtered payment accounts
   const filteredAccounts = useMemo(() => {
     return paymentAccounts.filter((acc) => {
@@ -419,15 +415,60 @@ export const BranchSettingsPage: React.FC = () => {
     }));
   };
 
+  const renderBranchSelection = () => {
+    const selectedBranches = allBranches.filter((branch) => creationBranchIds.includes(branch.id));
+    return (
+      <div className="space-y-1.5">
+        <label id="creation-branches-label" className="font-semibold text-slate-700 block">Branches *</label>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" aria-labelledby="creation-branches-label creation-branches-value"
+              className="w-full justify-between h-10 px-3 text-xs font-normal border-slate-200 shadow-none">
+              <span className="flex min-w-0 items-center gap-2">
+                <Building2 className="h-4 w-4 text-slate-400" />
+                <span id="creation-branches-value" className="truncate">
+                  {selectedBranches.length === 0 ? 'Select branches' : selectedBranches.length === 1 ? selectedBranches[0].name : selectedBranches.length + ' branches selected'}
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 text-slate-400" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-60 overflow-y-auto p-1.5">
+            {allBranches.length === 0 && <p className="px-3 py-2 text-xs text-slate-500">No branches available.</p>}
+            {allBranches.map((branch) => (
+              <DropdownMenuCheckboxItem key={branch.id} checked={creationBranchIds.includes(branch.id)}
+                onSelect={(event) => event.preventDefault()}
+                onCheckedChange={(checked) => setCreationBranchIds((ids) => checked ? [...new Set([...ids, branch.id])] : ids.filter((id) => id !== branch.id))}
+                className="py-2.5 text-xs data-[state=checked]:bg-blue-50 data-[state=checked]:text-[#2254E1]">
+                <span className="flex flex-1 items-center justify-between gap-3">
+                  <span>{branch.name}</span>
+                  <span className="text-[10px] text-slate-400">{branch.code}</span>
+                </span>
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {selectedBranches.length > 1 && (
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {selectedBranches.map((branch) => <Badge key={branch.id} variant="neutral" className="text-[10px] font-medium">{branch.name}</Badge>)}
+          </div>
+        )}
+        <p className="text-[10px] text-slate-500">Choose the branches where this will be available.</p>
+      </div>
+    );
+  };
+
   // Handler: Save Payment Account
   const handleSaveAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     try {
+      if (isAddAccountModalOpen && creationBranchIds.length === 0) throw new Error('Select at least one branch.');
       if (isAddAccountModalOpen) {
         await salonService.createPaymentAccount(
           selectedBranchId,
           {
+            ...(isAddAccountModalOpen ? { branchIds: creationBranchIds } : {}),
             name: accountFormData.name,
             accountType: accountFormData.accountType,
             providerName: accountFormData.providerName,
@@ -445,6 +486,7 @@ export const BranchSettingsPage: React.FC = () => {
         await salonService.updatePaymentAccount(
           selectedAccount.id,
           {
+            ...(isAddAccountModalOpen ? { branchIds: creationBranchIds } : {}),
             name: accountFormData.name,
             accountType: accountFormData.accountType,
             providerName: accountFormData.providerName,
@@ -513,10 +555,12 @@ export const BranchSettingsPage: React.FC = () => {
         throw new Error('Tax rate percentage must be between 0% and 100%.');
       }
 
+      if (isAddTaxRuleModalOpen && creationBranchIds.length === 0) throw new Error('Select at least one branch.');
       if (isAddTaxRuleModalOpen) {
         await salonService.createTaxRule(
           selectedBranchId,
           {
+            ...(isAddTaxRuleModalOpen ? { branchIds: creationBranchIds } : {}),
             name: taxRuleFormData.name,
             rate: rateDecimal,
             description: taxRuleFormData.description,
@@ -533,6 +577,7 @@ export const BranchSettingsPage: React.FC = () => {
         await salonService.updateTaxRule(
           selectedTaxRule.id,
           {
+            ...(isAddTaxRuleModalOpen ? { branchIds: creationBranchIds } : {}),
             name: taxRuleFormData.name,
             rate: rateDecimal,
             description: taxRuleFormData.description,
@@ -698,6 +743,16 @@ export const BranchSettingsPage: React.FC = () => {
     }
   };
 
+  if (!isSuperAdmin && ['/admin/payment-accounts', '/admin/tax-settings'].includes(pathname)) return <AccessDeniedView attemptedPath={pathname} />;
+
+  if (isSuperAdmin && !selectedBranchId) {
+    return <div className="max-w-lg mx-auto mt-8 space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
+      <h1 className="font-semibold text-slate-900">Select a branch</h1>
+      <p className="text-sm text-slate-500">Choose the branch whose settings you want to view or update.</p>
+      <BranchActionField value={selectedBranchId} onChange={setSelectedBranchId} />
+    </div>;
+  }
+
   return (
     <div className="space-y-6 font-sans">
       {/* FEEDBACK ALERTS */}
@@ -799,6 +854,7 @@ export const BranchSettingsPage: React.FC = () => {
                     accountIdentifier: '',
                     isActive: true,
                   });
+                  setCreationBranchIds([]);
                   setIsAddAccountModalOpen(true);
                 }}
                 className="text-xs font-semibold shadow-sm"
@@ -820,6 +876,7 @@ export const BranchSettingsPage: React.FC = () => {
                     isBranchDefault: taxRules.length === 0,
                     isActive: true,
                   });
+                  setCreationBranchIds([]);
                   setIsAddTaxRuleModalOpen(true);
                 }}
                 className="text-xs font-semibold shadow-sm"
@@ -1181,6 +1238,7 @@ export const BranchSettingsPage: React.FC = () => {
                             <TableCell>
                               <div>
                                 <p className="font-medium text-xs text-slate-900">{acc.name}</p>
+                                <span className="text-[10px] text-slate-500">{(acc.branchIds ?? [acc.branchId]).map((id) => allBranches.find((b) => b.id === id)?.name ?? id).join(", ")}</span>
                                 <span className="text-[10px] text-slate-400 block font-mono">ID: {acc.id}</span>
                               </div>
                             </TableCell>
@@ -1255,9 +1313,8 @@ export const BranchSettingsPage: React.FC = () => {
                                       setSelectedAccount(acc);
                                       setIsAccountStatusAlertOpen(true);
                                     }}
-                                    className={`text-xs cursor-pointer gap-2 ${
-                                      acc.isActive ? 'text-rose-600' : 'text-emerald-600'
-                                    }`}
+                                    className={`text-xs cursor-pointer gap-2 ${acc.isActive ? 'text-rose-600' : 'text-emerald-600'
+                                      }`}
                                   >
                                     {acc.isActive ? (
                                       <>
@@ -1533,6 +1590,7 @@ export const BranchSettingsPage: React.FC = () => {
           </DialogHeader>
 
           <form onSubmit={handleSaveAccount} className="space-y-3.5 text-xs">
+            {isAddAccountModalOpen && isSuperAdmin && renderBranchSelection()}
             <div>
               <label className="font-semibold text-slate-700 block mb-1">Account Display Name *</label>
               <Input
@@ -1648,6 +1706,7 @@ export const BranchSettingsPage: React.FC = () => {
           </DialogHeader>
 
           <form onSubmit={handleSaveTaxRule} className="space-y-3.5 text-xs">
+            {isAddTaxRuleModalOpen && isSuperAdmin && renderBranchSelection()}
             <div>
               <label className="font-semibold text-slate-700 block mb-1">Rule Name *</label>
               <Input
@@ -1739,9 +1798,8 @@ export const BranchSettingsPage: React.FC = () => {
             <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleToggleAccountStatus}
-              className={`text-xs ${
-                selectedAccount?.isActive ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
-              }`}
+              className={`text-xs ${selectedAccount?.isActive ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
             >
               {selectedAccount?.isActive ? 'Deactivate' : 'Activate'}
             </AlertDialogAction>
@@ -1808,9 +1866,8 @@ export const BranchSettingsPage: React.FC = () => {
             <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleToggleTaxRuleStatus}
-              className={`text-xs ${
-                selectedTaxRule?.isActive ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
-              }`}
+              className={`text-xs ${selectedTaxRule?.isActive ? 'bg-rose-600 hover:bg-rose-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
             >
               {selectedTaxRule?.isActive ? 'Deactivate' : 'Activate'}
             </AlertDialogAction>

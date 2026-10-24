@@ -892,7 +892,7 @@ export const StaffPersonalReportsPage: React.FC = () => {
       {/* PRINT MODAL: PAYSLIP */}
       {showPayslipPrintModal && selectedPayslip && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-100">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-100 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900">Salary Payslip — {selectedPayslip.month}</h3>
               <button
@@ -1036,7 +1036,7 @@ export const StaffPersonalReportsPage: React.FC = () => {
       {/* PRINT MODAL: COMMISSION */}
       {showCommissionPrintModal && selectedCommission && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-100">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-xl border border-slate-100 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900">Commission Statement — {selectedCommission.startDate} to {selectedCommission.endDate}</h3>
               <button
@@ -1083,7 +1083,7 @@ export const StaffPersonalReportsPage: React.FC = () => {
       {/* MODAL: COMMISSION BREAKDOWN */}
       {showCommissionBreakdownModal && selectedCommission && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl border border-slate-100">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-xl border border-slate-100 overflow-y-auto overscroll-contain">
             <div className="p-5 border-b border-slate-100 flex justify-between items-center">
               <div>
                 <h3 className="font-bold text-slate-900 text-sm">
@@ -1132,7 +1132,7 @@ export const StaffPersonalReportsPage: React.FC = () => {
       {/* PRINT MODAL: PERSONAL PERFORMANCE */}
       {showPerfPrintModal && performanceRecord && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-100">
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-100 overflow-y-auto overscroll-contain">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between print:hidden">
               <h3 className="font-bold text-slate-900 text-sm">Print Personal Performance Review</h3>
               <div className="flex items-center gap-2">

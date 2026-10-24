@@ -131,7 +131,7 @@ export const UnpaidInvoicesPage: React.FC = () => {
     setCollectionIdempotencyKey(key);
 
     // Find accounts for this invoice's branch
-    const branchAccs = paymentAccounts.filter((a) => a.branchId === inv.branchId);
+    const branchAccs = paymentAccounts.filter((a) => (a.branchIds ?? [a.branchId]).includes(inv.branchId));
     if (branchAccs.length > 0) {
       setSelectedOnlineAccountId(branchAccs[0].id);
     }
@@ -504,7 +504,7 @@ export const UnpaidInvoicesPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       {paymentAccounts
-                        .filter((a) => a.branchId === selectedInvoice.branchId)
+                        .filter((a) => (a.branchIds ?? [a.branchId]).includes(selectedInvoice.branchId))
                         .map((acc) => (
                           <SelectItem key={acc.id} value={acc.id} className="text-xs">
                             {acc.name} ({acc.accountIdentifier})

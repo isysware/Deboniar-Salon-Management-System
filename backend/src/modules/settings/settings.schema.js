@@ -10,6 +10,7 @@ export const branchQuery = z.object({ branchId: z.string().optional() }).passthr
 
 // ── Tax rules ────────────────────────────────────────────────────────────────
 export const createTaxRuleSchema = z.object({
+  branchIds: z.array(z.string().trim().min(1)).min(1).optional(),
   branchId:        z.string().optional(),
   name:            z.string().trim().min(1, 'Tax rule name is required.'),
   rate,
@@ -19,6 +20,7 @@ export const createTaxRuleSchema = z.object({
 });
 
 export const updateTaxRuleSchema = z.object({
+  branchIds: z.array(z.string().trim().min(1)).min(1).optional(),
   name:            z.string().trim().min(1).optional(),
   rate:            rate.optional(),
   description:     z.string().trim().nullable().optional(),
@@ -35,6 +37,7 @@ export const setDefaultTaxRuleSchema = z.object({
 const accountType = z.enum(['BANK', 'EASYPAISA', 'JAZZCASH', 'OTHER']);
 
 export const createPaymentAccountSchema = z.object({
+  branchIds: z.array(z.string().trim().min(1)).min(1).optional(),
   branchId:          z.string().optional(),
   name:              z.string().trim().min(1, 'Account display name is required.'),
   accountType:       accountType.default('BANK'),
@@ -46,6 +49,7 @@ export const createPaymentAccountSchema = z.object({
 
 // Balance is never editable directly — only operational postings change it.
 export const updatePaymentAccountSchema = z.object({
+  branchIds: z.array(z.string().trim().min(1)).min(1).optional(),
   name:              z.string().trim().min(1).optional(),
   accountType:       accountType.optional(),
   providerName:      z.string().trim().min(1).optional(),

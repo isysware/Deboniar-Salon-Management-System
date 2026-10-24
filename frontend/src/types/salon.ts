@@ -3,6 +3,7 @@ import type { User } from './auth';
 export type TaxTreatment = 'BRANCH_DEFAULT' | 'SPECIFIC_RULE' | 'EXEMPT';
 
 export interface TaxRule {
+  branchIds?: string[];
   id: string;
   branchId: string;
   name: string;
@@ -38,6 +39,7 @@ export interface Branch {
 export type PaymentAccountType = 'BANK' | 'EASYPAISA' | 'JAZZCASH' | 'OTHER';
 
 export interface PaymentAccount {
+  branchIds?: string[];
   id: string;
   branchId: string;
   name: string;

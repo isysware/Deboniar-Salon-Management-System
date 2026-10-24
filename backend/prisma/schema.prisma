@@ -471,6 +471,8 @@ model Branch {
   updatedAt             DateTime @updatedAt
 
   users        User[]
+  sharedTaxRules TaxRule[] @relation("TaxBranches")
+  sharedPaymentAccounts PaymentAccount[] @relation("PaymentBranches")
   taxRules     TaxRule[]
   paymentAccts PaymentAccount[]
   staff        Staff[]
@@ -484,6 +486,7 @@ model Branch {
 // ═══════════════════════════════════════════════════════════════════
 
 model TaxRule {
+  branches Branch[] @relation("TaxBranches")
   id              String   @id @default(uuid())
   branchId        String
   name            String
@@ -502,6 +505,7 @@ model TaxRule {
 
 // currentBalance is NEVER stored — it is openingBalance + Σ AccountMovement (IN − OUT)
 model PaymentAccount {
+  branches Branch[] @relation("PaymentBranches")
   id                String             @id @default(uuid())
   branchId          String
   name              String

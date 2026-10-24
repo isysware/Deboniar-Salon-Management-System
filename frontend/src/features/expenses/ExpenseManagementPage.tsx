@@ -293,7 +293,7 @@ export const ExpenseManagementPage: React.FC = () => {
       setFormDescription('');
       setFormAmount('');
       setFormPaymentSource('CASH_DRAWER');
-      setFormPaymentAccountId(paymentAccounts.find((a) => a.branchId === defaultBranch)?.id || '');
+      setFormPaymentAccountId(paymentAccounts.find((a) => (a.branchIds ?? [a.branchId]).includes(defaultBranch))?.id || '');
       setFormExternalRef('');
       setFormNotes('');
     }
@@ -1265,7 +1265,7 @@ export const ExpenseManagementPage: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     {expenseAccounts
-                      .filter((a) => a.branchId === formBranchId)
+                      .filter((a) => (a.branchIds ?? [a.branchId]).includes(formBranchId))
                       .map((a) => (
                         <SelectItem key={a.id} value={a.id}>
                           {a.name} — Balance: {formatCurrency(a.currentBalance)}

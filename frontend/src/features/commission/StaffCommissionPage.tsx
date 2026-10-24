@@ -1041,7 +1041,7 @@ export const StaffCommissionPage: React.FC = () => {
       {/* ========================================================================= */}
       {showPaymentModal && paymentTargetStatement && paymentTargetRun && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -1188,7 +1188,7 @@ export const StaffCommissionPage: React.FC = () => {
       {/* ========================================================================= */}
       {showHistoryModal && selectedStatement && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
@@ -1314,7 +1314,7 @@ export const StaffCommissionPage: React.FC = () => {
       {/* ========================================================================= */}
       {showCancelModal && runToCancel && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col p-6 space-y-4 text-xs">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-x-hidden overflow-y-auto flex flex-col p-6 space-y-4 text-xs max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
                 <Ban className="w-5 h-5" />
@@ -1369,7 +1369,7 @@ export const StaffCommissionPage: React.FC = () => {
       {/* ========================================================================= */}
       {showPrintModal && selectedStatement && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-xl overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-xl overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <span className="font-bold text-slate-800 text-sm">Official Commission Statement</span>
               <div className="flex items-center gap-2">

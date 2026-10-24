@@ -346,7 +346,7 @@ export const StaffDirectoryPage: React.FC = () => {
   };
 
   const handleOpenAdd = () => {
-    const defaultBranch = isSuperAdmin ? (branchFilter !== 'ALL' ? branchFilter : branches[0]?.id || '') : (user.branchId as string);
+    const defaultBranch = isSuperAdmin ? '' : (user.branchId as string);
     const code = generateNextEmployeeCode(defaultBranch, allStaffList.length > 0 ? allStaffList : staffList);
 
     setFormData({
@@ -475,6 +475,11 @@ export const StaffDirectoryPage: React.FC = () => {
     e.preventDefault();
     setFormError(null);
 
+    if (!isEditModalOpen && isSuperAdmin && !branches.some((branch) => branch.id === formData.branchId)) {
+      setFormError('Please select a branch for this staff member.');
+      toast.error('Please select a branch for this staff member.');
+      return;
+    }
     if (!formData.name.trim() || !formData.employeeCode.trim() || !formData.phone.trim()) {
       const msg = 'Full name, employee code, and primary phone number are required.';
       setFormError(msg);

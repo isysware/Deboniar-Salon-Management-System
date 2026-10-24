@@ -104,7 +104,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
 
   // Filters
   const [selectedBranchId, setSelectedBranchId] = useState<string>(
-    user.role === 'SUPER_ADMIN' ? (activeBranchId === 'ALL' ? (allBranches[0]?.id || '') : activeBranchId) : (user.branchId || '')
+    user.role === 'SUPER_ADMIN' ? '' : (user.branchId || '')
   );
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth);
   const [selectedMonthNum, setSelectedMonthNum] = useState<string>(initialMonth.slice(5, 7) || '10');
@@ -365,6 +365,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
   };
 
   const handleFilter = async () => {
+    if (!effectiveBranchId || effectiveBranchId === 'ALL') { toast.error('Please select a branch for this action.'); return; }
     try {
       setActionLoading(true);
       setFeedback(null);
@@ -404,6 +405,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
   };
 
   const handleGenerateSalary = async () => {
+    if (!effectiveBranchId || effectiveBranchId === 'ALL') { toast.error('Please select a branch for this action.'); return; }
     if (!hasFiltered) {
       setFeedback({ type: 'error', message: 'Please click Filter first to view and select eligible staff.' });
       return;
@@ -454,6 +456,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
 
   // Generate Draft Preview
   const handleGeneratePreview = async () => {
+    if (!effectiveBranchId || effectiveBranchId === 'ALL') { toast.error('Please select a branch for this action.'); return; }
     try {
       setActionLoading(true);
       setFeedback(null);
@@ -829,6 +832,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
                     disabled={user.role !== 'SUPER_ADMIN'}
                     className="w-full text-sm pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 transition-all font-medium text-slate-800 disabled:opacity-75 disabled:cursor-not-allowed"
                   >
+                    {user.role === 'SUPER_ADMIN' && <option value="">Select branch for this action</option>}
                     {allBranches.map((b) => (
                       <option key={b.id} value={b.id}>
                         {b.name}
@@ -1586,7 +1590,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
       {/* ========================================================================= */}
       {showDetailsModal && selectedPayslip && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
@@ -1776,7 +1780,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
       {/* ========================================================================= */}
       {showPaymentModal && paymentTargetPayslip && paymentTargetRun && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
@@ -1931,7 +1935,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
       {/* ========================================================================= */}
       {showDeductionModal && deductionTargetPayslip && deductionTargetRun && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl">
@@ -2080,7 +2084,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
       {/* ========================================================================= */}
       {showHistoryModal && selectedPayslip && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-2xl overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div>
                 <h3 className="text-base font-bold text-slate-900">
@@ -2212,7 +2216,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
       {/* ========================================================================= */}
       {showCancelModal && runToCancel && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-hidden flex flex-col p-6 space-y-4 text-xs">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-md overflow-x-hidden overflow-y-auto flex flex-col p-6 space-y-4 text-xs max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-rose-50 text-rose-600 rounded-xl">
                 <Ban className="w-5 h-5" />
@@ -2267,7 +2271,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
       {/* ========================================================================= */}
       {showPolicyModal && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
@@ -2402,7 +2406,7 @@ export const PayrollPage: React.FC<PayrollPageProps> = ({ mode = 'GENERATE' }) =
       {/* ========================================================================= */}
       {showPrintModal && selectedPayslip && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-xl w-full max-w-xl overflow-hidden flex flex-col">
+          <div className="bg-white rounded-3xl shadow-xl w-full max-w-xl overflow-x-hidden overflow-y-auto flex flex-col max-h-[calc(100dvh-2rem)] overscroll-contain">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <span className="font-bold text-slate-800 text-sm">Official Employee Payslip</span>
               <div className="flex items-center gap-2">

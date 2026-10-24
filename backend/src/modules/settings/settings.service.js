@@ -18,6 +18,12 @@ const ensureBranch = async (tx, id) => {
   return branch;
 };
 
+const membership = (branchId) => ({ OR: [{ branchId }, { branches: { some: { id: branchId } } }] });
+const selectedBranches = async (tx, input, actor) => {
+  const ids = [...new Set(input.branchIds ?? [resolveWriteBranch(actor, input.branchId)])];
+  for (const id of ids) { assertBranchAccess(actor, id); await ensureBranch(tx, id); }
+  return ids;
+};
 const audit = (tx, actor, action, entity, entityId, branchId, before, after) =>
   auditLog(tx, { userId: actor.id, userName: actor.name, action, entity, entityId, branchId, before, after });
 
@@ -25,8 +31,9 @@ const audit = (tx, actor, action, entity, entityId, branchId, before, after) =>
 
 export const listTaxRules = async (actor, branchId) => {
   const b = resolveReadBranch(actor, branchId);
-  const rules = await prisma.taxRule.findMany({ where: b ? { branchId: b } : {}, orderBy: { createdAt: 'asc' } });
-  return rules.map(toTaxRuleDTO);
+  const rules = await prisma.taxRule.findMany({ where: b ? membership(b) : {}, include: { branches: true }, orderBy: { createdAt: 'asc' } });
+  const defaults = await prisma.branch.findMany({ where: { ...(b ? { id: b } : {}), defaultTaxRuleId: { in: rules.map((r) => r.id) } }, select: { defaultTaxRuleId: true } });
+  return rules.map((r) => ({ ...toTaxRuleDTO(r), isBranchDefault: defaults.some((d) => d.defaultTaxRuleId === r.id) }));
 };
 
 /** Make `ruleId` the branch default (or clear the default when null) and sync branch tax fields. */
@@ -40,12 +47,14 @@ const applyBranchDefault = async (tx, branchId, rule) => {
 };
 
 export const createTaxRule = async (input, actor) => {
-  const branchId = resolveWriteBranch(actor, input.branchId, 'Access Denied: Cannot configure tax rules for another branch.');
+
   return prisma.$transaction(async (tx) => {
-    await ensureBranch(tx, branchId);
+    const branchIds = await selectedBranches(tx, input, actor);
+    const branchId = branchIds[0];
     let rule = await tx.taxRule.create({
       data: {
         branchId,
+        branches: { connect: branchIds.map((id) => ({ id })) },
         name:        input.name,
         rate:        input.rate,
         description: input.description || null,
@@ -55,11 +64,11 @@ export const createTaxRule = async (input, actor) => {
     // Creating a rule never silently enables tax — only an explicit default selection does.
     if (input.isBranchDefault) {
       if (!rule.isActive) throw badRequest('RULE_INACTIVE', 'An inactive tax rule cannot be the branch default.');
-      await applyBranchDefault(tx, branchId, rule);
+      for (const id of branchIds) await applyBranchDefault(tx, id, rule);
       rule = await tx.taxRule.findUnique({ where: { id: rule.id } });
     }
     await audit(tx, actor, 'TAX_RULE_CREATED', 'TaxRule', rule.id, branchId, null, rule);
-    return toTaxRuleDTO(rule);
+    return toTaxRuleDTO(await tx.taxRule.findUnique({ where: { id: rule.id }, include: { branches: true } }));
   });
 };
 
@@ -70,24 +79,31 @@ export const updateTaxRule = async (id, input, actor) => {
     assertBranchAccess(actor, before.branchId, 'Access Denied: Cannot edit tax rule from another branch.');
 
     const data = {};
+    if (input.branchIds) {
+      const ids = await selectedBranches(tx, input, actor);
+      data.branches = { set: ids.map((id) => ({ id })) };
+      data.branchId = ids[0];
+    }
     if (input.name) data.name = input.name;
     if (input.rate !== undefined) data.rate = input.rate;
     if (input.description !== undefined) data.description = input.description || null;
     if (input.isActive !== undefined) data.isActive = input.isActive;
     let rule = await tx.taxRule.update({ where: { id }, data });
 
-    if (rule.isBranchDefault && !rule.isActive) {
-      // Deactivating the default rule disables branch tax to prevent stale rates.
-      await applyBranchDefault(tx, rule.branchId, null);
-    } else if (input.isBranchDefault && rule.isActive) {
-      await applyBranchDefault(tx, rule.branchId, rule);
-    } else if (rule.isBranchDefault) {
-      // Keep the branch rate synchronised with its default rule.
-      await tx.branch.update({ where: { id: rule.branchId }, data: { taxRate: rule.rate } });
+    const defaultBranches = await tx.branch.findMany({ where: { defaultTaxRuleId: id } });
+    for (const branch of defaultBranches) {
+      if (!rule.isActive || (input.branchIds && !input.branchIds.includes(branch.id))) await applyBranchDefault(tx, branch.id, null);
+      else await tx.branch.update({ where: { id: branch.id }, data: { taxRate: rule.rate } });
+    }
+    if (input.isBranchDefault && rule.isActive) {
+      const branch = input.branchId ?? rule.branchId;
+      const applicable = await tx.taxRule.findFirst({ where: { id, ...membership(branch) } });
+      if (!applicable) throw badRequest('RULE_BRANCH_MISMATCH', 'Tax rule is not assigned to this branch.');
+      await applyBranchDefault(tx, branch, rule);
     }
     rule = await tx.taxRule.findUnique({ where: { id } });
     await audit(tx, actor, 'TAX_RULE_UPDATED', 'TaxRule', id, rule.branchId, before, rule);
-    return toTaxRuleDTO(rule);
+    return toTaxRuleDTO(await tx.taxRule.findUnique({ where: { id: rule.id }, include: { branches: true } }));
   });
 };
 
@@ -103,7 +119,7 @@ export const setBranchDefaultTaxRule = async ({ branchId: requested, ruleId }, a
     const before = await ensureBranch(tx, branchId);
     let rule = null;
     if (ruleId) {
-      rule = await tx.taxRule.findFirst({ where: { id: ruleId, branchId } });
+      rule = await tx.taxRule.findFirst({ where: { id: ruleId, ...membership(branchId) } });
       if (!rule) throw notFound('TAX_RULE_NOT_FOUND', `Tax rule '${ruleId}' not found in this branch.`);
       if (!rule.isActive) throw badRequest('RULE_INACTIVE', `Cannot set deactivated tax rule '${rule.name}' as branch default.`);
     }
@@ -116,33 +132,35 @@ export const setBranchDefaultTaxRule = async ({ branchId: requested, ruleId }, a
 
 // ═══ PAYMENT ACCOUNTS ═════════════════════════════════════════════════════════
 
-const withBalances = async (accounts, mapper) => {
-  const balances = await accountBalances(accounts.map((a) => a.id));
+const withBalances = async (accounts, mapper, branchId) => {
+  const balances = await accountBalances(accounts.map((a) => a.id), { ...(branchId ? { branchIds: [branchId] } : {}) });
   return accounts.map((a) => mapper(a, balances.get(a.id)));
 };
 
 export const listPaymentAccounts = async (actor, branchId) => {
   const b = resolveReadBranch(actor, branchId);
-  const accounts = await prisma.paymentAccount.findMany({ where: b ? { branchId: b } : {}, orderBy: { createdAt: 'asc' } });
-  return withBalances(accounts, toPaymentAccountDTO);
+  const accounts = await prisma.paymentAccount.findMany({ where: b ? membership(b) : {}, include: { branches: true }, orderBy: { createdAt: 'asc' } });
+  return withBalances(accounts, toPaymentAccountDTO, b);
 };
 
 export const listOnlineAccounts = async (actor, branchId) => {
   const b = resolveReadBranch(actor, branchId);
-  const accounts = await prisma.paymentAccount.findMany({ where: b ? { branchId: b } : {}, orderBy: { createdAt: 'asc' } });
-  return withBalances(accounts, toOnlineAccountDTO);
+  const accounts = await prisma.paymentAccount.findMany({ where: b ? membership(b) : {}, include: { branches: true }, orderBy: { createdAt: 'asc' } });
+  return withBalances(accounts, toOnlineAccountDTO, b);
 };
 
-const accountDTO = async (account) => (await withBalances([account], toPaymentAccountDTO))[0];
+const accountDTO = async (account) => (await withBalances([await prisma.paymentAccount.findUnique({ where: { id: account.id }, include: { branches: true } })], toPaymentAccountDTO))[0];
 
 export const createPaymentAccount = async (input, actor) => {
-  const branchId = resolveWriteBranch(actor, input.branchId, 'Access Denied: Cannot configure payment account for another branch.');
+
   const account = await prisma.$transaction(async (tx) => {
-    await ensureBranch(tx, branchId);
+    const branchIds = await selectedBranches(tx, input, actor);
+    const branchId = branchIds[0];
     // New accounts always start at zero; balances only change through postings.
     const created = await tx.paymentAccount.create({
       data: {
         branchId,
+        branches: { connect: branchIds.map((id) => ({ id })) },
         name:              input.name,
         accountType:       input.accountType,
         providerName:      input.providerName,
@@ -165,6 +183,11 @@ export const updatePaymentAccount = async (id, input, actor) => {
     assertBranchAccess(actor, before.branchId, 'Access Denied: Cannot edit payment account from another branch.');
 
     const data = {};
+    if (input.branchIds) {
+      const ids = await selectedBranches(tx, input, actor);
+      data.branches = { set: ids.map((id) => ({ id })) };
+      data.branchId = ids[0];
+    }
     for (const f of ['name', 'providerName', 'accountHolder', 'accountType']) if (input[f]) data[f] = input[f];
     if (input.accountIdentifier !== undefined) data.accountIdentifier = input.accountIdentifier || null;
     if (input.isActive !== undefined) data.isActive = input.isActive;
@@ -248,6 +271,7 @@ export const updateExpenseCategory = async (id, input, actor) => {
     assertBranchAccess(actor, before.branchId, 'Access Denied: Cannot update categories for another branch.');
 
     const data = {};
+
     if (input.name !== undefined) {
       await assertCategoryNameFree(tx, before.branchId, input.name, id);
       data.name = input.name;

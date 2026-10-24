@@ -1267,7 +1267,7 @@ export const TipsManagementPage: React.FC = () => {
       {/* MODAL 2: RECORD TIP PAYOUT */}
       {showPayoutModal && selectedAllocationForPayout && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-slate-900 text-base">Disburse Tip Payout</h3>
@@ -1439,7 +1439,7 @@ export const TipsManagementPage: React.FC = () => {
       {/* MODAL 3: REVERSE TIP PAYOUT */}
       {showReverseModal && selectedPayoutForReverse && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 text-rose-600">
                 <RotateCcw className="w-5 h-5" />
@@ -1516,7 +1516,7 @@ export const TipsManagementPage: React.FC = () => {
       {/* MODAL 4: CANCEL ALLOCATION */}
       {showCancelAllocationModal && selectedAllocationForCancel && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2 text-rose-600">
                 <AlertTriangle className="w-5 h-5" />
@@ -1569,7 +1569,7 @@ export const TipsManagementPage: React.FC = () => {
       {/* MODAL 5: PRINT VOUCHER */}
       {showPrintVoucherModal && voucherData && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-8 shadow-2xl border border-slate-200 space-y-6">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-8 shadow-2xl border border-slate-200 space-y-6 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain">
             <div className="text-center border-b border-slate-200 pb-4">
               <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider">iSysware SalonOS</h2>
               <p className="text-xs text-slate-500">Official Staff Gratuity Disbursement Voucher</p>

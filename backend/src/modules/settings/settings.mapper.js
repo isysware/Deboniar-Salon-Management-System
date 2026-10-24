@@ -5,6 +5,7 @@ import { num, opt, iso } from '../../lib/dto.js';
 export const toTaxRuleDTO = (r) => ({
   id:              r.id,
   branchId:        r.branchId,
+  branchIds: r.branches?.length ? r.branches.map((b) => b.id) : [r.branchId],
   name:            r.name,
   rate:            num(r.rate),
   description:     opt(r.description),
@@ -16,6 +17,7 @@ export const toTaxRuleDTO = (r) => ({
 export const toPaymentAccountDTO = (a, balance) => ({
   id:                a.id,
   branchId:          a.branchId,
+  branchIds: a.branches?.length ? a.branches.map((b) => b.id) : [a.branchId],
   name:              a.name,
   accountType:       a.accountType,
   providerName:      a.providerName,

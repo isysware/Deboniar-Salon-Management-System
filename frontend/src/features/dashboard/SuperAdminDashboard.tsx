@@ -14,7 +14,8 @@ import {
 } from 'lucide-react';
 
 export const SuperAdminDashboard: React.FC = () => {
-  const { activeBranchId, switchBranch, demoDate } = useAuth();
+  const { demoDate } = useAuth();
+  const [activeBranchId, setDashboardBranch] = useState('ALL');
   const { navigate } = useRouter();
 
   const [data, setData] = useState<SuperAdminDashboardData | null>(null);
@@ -87,6 +88,7 @@ export const SuperAdminDashboard: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5">
+          {activeBranchId !== 'ALL' && <Button variant="outline" size="sm" onClick={() => setDashboardBranch('ALL')}>All Branches</Button>}
           <Button
             variant="outline"
             size="sm"
@@ -187,7 +189,7 @@ export const SuperAdminDashboard: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => switchBranch(branch.branchId)}
+                        onClick={() => setDashboardBranch(branch.branchId)}
                       >
                         Inspect Branch
                       </Button>

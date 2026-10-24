@@ -16,6 +16,7 @@ export function canAccessRoute(user: User | null, routePath: string): boolean {
 
   // Normalize path without query/hash
   const path = routePath.split('?')[0].split('#')[0];
+  if (['/admin/payment-accounts', '/admin/tax-settings'].includes(path)) return user.role === 'SUPER_ADMIN';
 
   // Root or base dashboard redirect is handled contextually
   if (path === '/' || path === '') return true;

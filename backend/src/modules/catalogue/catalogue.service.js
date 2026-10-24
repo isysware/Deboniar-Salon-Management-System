@@ -24,7 +24,7 @@ const assertActiveBranch = async (tx, branchId) => {
 const assertTaxRule = async (tx, branchId, taxTreatment, ruleId) => {
   if (taxTreatment !== 'SPECIFIC_RULE') return null;
   if (!ruleId) throw badRequest('TAX_RULE_REQUIRED', 'A specific tax rule must be selected when Tax Treatment is set to Specific Rule.');
-  const rule = await tx.taxRule.findFirst({ where: { id: ruleId, branchId } });
+  const rule = await tx.taxRule.findFirst({ where: { id: ruleId, OR: [{ branchId }, { branches: { some: { id: branchId } } }] } });
   if (!rule) throw badRequest('TAX_RULE_NOT_FOUND', 'Selected specific tax rule does not exist in this branch.');
   if (!rule.isActive) throw badRequest('TAX_RULE_INACTIVE', `Selected tax rule '${rule.name}' is currently deactivated.`);
   return ruleId;

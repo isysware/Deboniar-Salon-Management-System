@@ -110,13 +110,13 @@ const liveMethods: SalonServiceContract = {
   resetUserPassword: (id) => api.post(`/users/${id}/reset-password`),
 
   // ── Step 4 · Branch settings (tax rules, payment accounts) ─────────────────
-  getTaxRules: (branchId) => api.get<TaxRule[]>('/tax-rules', branchQuery(branchId)),
+  getTaxRules: (branchId) => api.get<TaxRule[]>('/tax-rules/options', branchQuery(branchId)),
   createTaxRule: (branchId, rule) => api.post<TaxRule>('/tax-rules', { ...rule, branchId }),
   updateTaxRule: (id, rule) => api.put<TaxRule>(`/tax-rules/${id}`, rule),
   setBranchDefaultTaxRule: (branchId, ruleId) => api.post<Branch>('/tax-rules/branch-default', { branchId, ruleId }),
   toggleTaxRuleStatus: (id) => api.post<TaxRule>(`/tax-rules/${id}/toggle`),
 
-  getPaymentAccounts: (branchId) => api.get<PaymentAccount[]>('/payment-accounts', branchQuery(branchId)),
+  getPaymentAccounts: (branchId) => api.get<PaymentAccount[]>('/payment-accounts/options', branchQuery(branchId)),
   createPaymentAccount: (branchId, account) => api.post<PaymentAccount>('/payment-accounts', { ...account, branchId }),
   updatePaymentAccount: (id, account) => api.put<PaymentAccount>(`/payment-accounts/${id}`, account),
   togglePaymentAccountStatus: (id) => api.post<PaymentAccount>(`/payment-accounts/${id}/toggle`),

@@ -481,13 +481,13 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
             id: 'payment-accounts-child',
             label: 'Payment Accounts',
             href: '/admin/payment-accounts',
-            allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
+            allowedRoles: ['SUPER_ADMIN'],
           },
           {
             id: 'tax-settings-child',
             label: 'Branch Tax Settings',
             href: '/admin/tax-settings',
-            allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
+            allowedRoles: ['SUPER_ADMIN'],
           },
           {
             id: 'attendance-settings-child',

@@ -14,20 +14,24 @@ const BACK_OFFICE = ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'];
 // ── /tax-rules ───────────────────────────────────────────────────────────────
 export const taxRuleRoutes = Router();
 taxRuleRoutes.use(authenticate);
-taxRuleRoutes.get('/',                authorize(...BACK_OFFICE), validate(v.branchQuery, 'query'), c.listTaxRules);
-taxRuleRoutes.post('/',               authorize(...ADMINS), validate(v.createTaxRuleSchema), c.createTaxRule);
+taxRuleRoutes.get('/options', authorize(...BACK_OFFICE), validate(v.branchQuery, 'query'), c.listTaxRules);
+taxRuleRoutes.use(authorize('SUPER_ADMIN'));
+taxRuleRoutes.get('/', authorize(...BACK_OFFICE), validate(v.branchQuery, 'query'), c.listTaxRules);
+taxRuleRoutes.post('/', authorize(...ADMINS), validate(v.createTaxRuleSchema), c.createTaxRule);
 taxRuleRoutes.post('/branch-default', authorize(...ADMINS), validate(v.setDefaultTaxRuleSchema), c.setDefaultTaxRule);
-taxRuleRoutes.put('/:id',             authorize(...ADMINS), validate(v.updateTaxRuleSchema), c.updateTaxRule);
-taxRuleRoutes.post('/:id/toggle',     authorize(...ADMINS), c.toggleTaxRule);
+taxRuleRoutes.put('/:id', authorize(...ADMINS), validate(v.updateTaxRuleSchema), c.updateTaxRule);
+taxRuleRoutes.post('/:id/toggle', authorize(...ADMINS), c.toggleTaxRule);
 
 // ── /payment-accounts ────────────────────────────────────────────────────────
 export const paymentAccountRoutes = Router();
 paymentAccountRoutes.use(authenticate);
-paymentAccountRoutes.get('/',            authorize(...BACK_OFFICE), validate(v.branchQuery, 'query'), c.listPaymentAccounts);
-paymentAccountRoutes.post('/',           authorize(...ADMINS), validate(v.createPaymentAccountSchema), c.createPaymentAccount);
-paymentAccountRoutes.put('/:id',         authorize(...ADMINS), validate(v.updatePaymentAccountSchema), c.updatePaymentAccount);
+paymentAccountRoutes.get('/options', authorize(...BACK_OFFICE), validate(v.branchQuery, 'query'), c.listPaymentAccounts);
+paymentAccountRoutes.use(authorize('SUPER_ADMIN'));
+paymentAccountRoutes.get('/', authorize(...BACK_OFFICE), validate(v.branchQuery, 'query'), c.listPaymentAccounts);
+paymentAccountRoutes.post('/', authorize(...ADMINS), validate(v.createPaymentAccountSchema), c.createPaymentAccount);
+paymentAccountRoutes.put('/:id', authorize(...ADMINS), validate(v.updatePaymentAccountSchema), c.updatePaymentAccount);
 paymentAccountRoutes.post('/:id/toggle', authorize(...ADMINS), c.togglePaymentAccount);
-paymentAccountRoutes.delete('/:id',      authorize(...ADMINS), c.deletePaymentAccount);
+paymentAccountRoutes.delete('/:id', authorize(...ADMINS), c.deletePaymentAccount);
 
 // ── /online-accounts (legacy read-only view of payment accounts) ─────────────
 export const onlineAccountRoutes = Router();
@@ -37,9 +41,9 @@ onlineAccountRoutes.get('/', authorize(...BACK_OFFICE), validate(v.branchQuery, 
 // ── /expense-categories ──────────────────────────────────────────────────────
 export const expenseCategoryRoutes = Router();
 expenseCategoryRoutes.use(authenticate);
-expenseCategoryRoutes.get('/',            authorize(...BACK_OFFICE), validate(v.branchQuery, 'query'), c.listExpenseCategories);
-expenseCategoryRoutes.post('/',           authorize(...ADMINS), validate(v.createExpenseCategorySchema), c.createExpenseCategory);
-expenseCategoryRoutes.put('/:id',         authorize(...ADMINS), validate(v.updateExpenseCategorySchema), c.updateExpenseCategory);
+expenseCategoryRoutes.get('/', authorize(...BACK_OFFICE), validate(v.branchQuery, 'query'), c.listExpenseCategories);
+expenseCategoryRoutes.post('/', authorize(...ADMINS), validate(v.createExpenseCategorySchema), c.createExpenseCategory);
+expenseCategoryRoutes.put('/:id', authorize(...ADMINS), validate(v.updateExpenseCategorySchema), c.updateExpenseCategory);
 expenseCategoryRoutes.post('/:id/toggle', authorize(...ADMINS), c.toggleExpenseCategory);
 
 // ── /payroll-policy (Accountant excluded) ────────────────────────────────────

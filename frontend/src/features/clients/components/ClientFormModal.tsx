@@ -78,7 +78,7 @@ export const ClientFormModal: React.FC<ClientFormModalProps> = ({
       setSourceDetails(clientToEdit.sourceDetails || '');
       setNotes(clientToEdit.notes || '');
     } else {
-      setBranchId(activeBranchId !== 'ALL' ? activeBranchId : branches[0]?.id || '');
+      setBranchId(user?.role === 'SUPER_ADMIN' ? '' : activeBranchId);
       setName(initialName);
       setPhone(initialPhone);
       setEmail('');
@@ -116,6 +116,8 @@ export const ClientFormModal: React.FC<ClientFormModalProps> = ({
     if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       errors.email = 'Please enter a valid email address';
     }
+
+    if (!branchId || !branches.some((branch) => branch.id === branchId)) errors.branchId = 'Please select a branch for this client.';
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -193,6 +195,7 @@ export const ClientFormModal: React.FC<ClientFormModalProps> = ({
                   onChange={(e) => setBranchId(e.target.value)}
                   className="w-full h-9 px-3 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-800 font-medium focus:ring-1 focus:ring-blue-500"
                 >
+                  <option value="">Select branch for this client</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name} ({b.code})

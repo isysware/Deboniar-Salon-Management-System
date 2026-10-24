@@ -15,7 +15,6 @@ interface AuthContextType {
   isLoading: boolean;
   login: (params: LoginParams) => Promise<Session>;
   logout: () => Promise<void>;
-  switchBranch: (branchId: string | 'ALL') => void;
   refreshBranches: () => Promise<void>;
 }
 
@@ -117,20 +116,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const switchBranch = (branchId: string | 'ALL') => {
-    if (!session || session.user.role !== 'SUPER_ADMIN') {
-      console.warn('Branch switching is restricted to Super Administrator');
-      return;
-    }
-    const updated = authService.setActiveBranch(branchId);
-    if (updated) {
-      setSession({ ...updated });
-    }
-  };
-
   const user = session ? session.user : null;
   const activeBranchId = (session && session.user.role === 'SUPER_ADMIN')
-    ? (session.activeBranchId || 'ALL')
+    ? 'ALL'
     : (session?.user?.branchId || '');
   const currentBranch =
     activeBranchId === 'ALL'
@@ -150,7 +138,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         logout,
-        switchBranch,
         refreshBranches,
       }}
     >

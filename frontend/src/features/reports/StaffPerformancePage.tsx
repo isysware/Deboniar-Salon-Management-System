@@ -852,7 +852,7 @@ export const StaffPerformancePage: React.FC = () => {
       {/* Employee Service Drilldown Modal */}
       {selectedStaffRecord && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto overscroll-contain">
             {/* Modal Header */}
             <div className="p-5 border-b border-slate-100 flex items-start justify-between">
               <div className="flex items-center gap-3">

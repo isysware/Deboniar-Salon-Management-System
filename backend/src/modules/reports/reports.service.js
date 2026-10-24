@@ -1702,7 +1702,7 @@ export const paymentAccountsReport = async (actor, query = {}) => {
 
   // 1. Fetch matching payment accounts
   const accountWhere = {
-    ...branchFilter,
+    ...(ctx.branchId ? { OR: [{ branchId: ctx.branchId }, { branches: { some: { id: ctx.branchId } } }] } : {}),
     ...(query.accountId && query.accountId !== 'ALL' ? { id: query.accountId } : {}),
   };
 
@@ -1747,6 +1747,7 @@ export const paymentAccountsReport = async (actor, query = {}) => {
   const preMovementsSums = await prisma.accountMovement.groupBy({
     by: ['accountId', 'direction'],
     where: {
+      ...branchFilter,
       accountId: { in: accountIds },
       createdAt: { lt: ctx.fromDate },
     },
@@ -1758,12 +1759,13 @@ export const paymentAccountsReport = async (actor, query = {}) => {
   for (const a of accounts) {
     const inBefore = preMovementsSums.find((s) => s.accountId === a.id && s.direction === 'IN')?._sum.amount ?? 0;
     const outBefore = preMovementsSums.find((s) => s.accountId === a.id && s.direction === 'OUT')?._sum.amount ?? 0;
-    const opening = toDec(a.openingBalance).plus(toDec(inBefore)).minus(toDec(outBefore));
+    const opening = toDec(!ctx.branchId || a.branchId === ctx.branchId ? a.openingBalance : 0).plus(toDec(inBefore)).minus(toDec(outBefore));
     openingBalanceMap.set(a.id, opening);
   }
 
   // 3. Fetch movements within range [ctx.fromDate, ctx.toDate]
   const movementWhere = {
+    ...branchFilter,
     accountId: { in: accountIds },
     createdAt: { gte: ctx.fromDate, lte: ctx.toDate },
     ...(query.transactionType && query.transactionType !== 'ALL' ? { type: query.transactionType } : {}),
@@ -1795,6 +1797,7 @@ export const paymentAccountsReport = async (actor, query = {}) => {
     runningMap.set(a.id, openingBalanceMap.get(a.id));
   }
 
+  const branchNames = new Map((await prisma.branch.findMany({ select: { id: true, name: true } })).map((b) => [b.id, b.name]));
   const rawRows = [];
   for (const m of movements) {
     const prevBal = runningMap.get(m.accountId) || toDec(0);
@@ -1823,8 +1826,8 @@ export const paymentAccountsReport = async (actor, query = {}) => {
       accountName: m.account.name,
       accountType: m.account.accountType,
       providerName: m.account.providerName,
-      branchId: m.account.branchId,
-      branchName: m.account.branch?.name || 'Branch',
+      branchId: m.branchId,
+      branchName: branchNames.get(m.branchId) || 'Branch',
       type: m.type,
       direction: m.direction,
       reference: m.reference || 'REF-N/A',
@@ -1881,8 +1884,8 @@ export const paymentAccountsReport = async (actor, query = {}) => {
       providerName: a.providerName,
       accountHolder: a.accountHolder,
       accountIdentifier: a.accountIdentifier,
-      branchId: a.branchId,
-      branchName: a.branch?.name || 'Branch',
+      branchId: ctx.branchId ?? a.branchId,
+      branchName: branchNames.get(ctx.branchId ?? a.branchId) || 'Branch',
       openingBalance: n(opening),
       moneyIn: n(mIn),
       moneyOut: n(mOut),

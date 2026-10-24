@@ -73,9 +73,21 @@
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  :is(button, a, input, select, textarea, [tabindex]):focus-visible {
+  /* Prevent duplicate outline / double borders on dropdowns, selects, buttons, and inputs */
+  :is(select, input, textarea, button) {
+    outline: none;
+  }
+
+  :is(select, input, textarea, button):focus,
+  :is(select, input, textarea, button):focus-visible {
+    outline: none !important;
+  }
+
+  /* Accessible focus outline for links and non-input interactive elements */
+  a:focus-visible,
+  [tabindex]:not(select):not(input):not(textarea):not(button):focus-visible {
     outline: 2px solid #2254e1;
-    outline-offset: 3px;
+    outline-offset: 2px;
   }
 }
 

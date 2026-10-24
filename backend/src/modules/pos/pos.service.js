@@ -190,7 +190,7 @@ export const postInvoice = async (input, actor, idempotencyKey, request) => {
       tx.package.findMany({ where: { id: { in: ids('PACKAGE') } }, include: { components: { include: { service: true } } } }),
       tx.inventoryItem.findMany({ where: { id: { in: ids('PRODUCT') } } }),
       tx.staff.findMany({ where: { branchId } }),
-      tx.taxRule.findMany({ where: { branchId } }),
+      tx.taxRule.findMany({ where: { OR: [{ branchId }, { branches: { some: { id: branchId } } }] } }),
     ]);
     const staffById = new Map(staffRows.map((s) => [s.id, s]));
     const requireStaff = (id, label) => {
