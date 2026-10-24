@@ -1,0 +1,57 @@
+{
+  "name": "salonos-backend",
+  "version": "1.0.0",
+  "description": "SalonOS (iSysware) — Multi-branch Salon Management System API",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "build": "node scripts/build.js",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "node prisma/seed.js",
+    "db:reset": "prisma migrate reset --force",
+    "db:studio": "prisma studio",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:isolated": "node scripts/run-isolated-tests.js",
+    "test:payroll": "node scripts/run-isolated-tests.js --config vitest.payroll-integration.config.js",
+    "lint": "echo 'No linter configured'",
+    "db:new-migration": "node scripts/new-migration.js",
+    "db:deploy": "prisma migrate deploy"
+  },
+  "keywords": [
+    "salon",
+    "management",
+    "api",
+    "express",
+    "prisma"
+  ],
+  "author": "iSysware",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "decimal.js": "^10.6.0",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "morgan": "^1.12.1",
+    "prisma": "^5.22.0",
+    "uuid": "^14.0.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "supertest": "^7.3.0",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "prisma": {
+    "seed": "node prisma/seed.js"
+  }
+}

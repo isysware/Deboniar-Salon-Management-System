@@ -1,0 +1,7 @@
+{
+  "name": "iSysware Salon Management System",
+  "description": "Advanced multi-branch salon management system with role-aware portals, unified operational workspace, cash custody, and financial intelligence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
