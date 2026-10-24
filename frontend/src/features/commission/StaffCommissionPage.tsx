@@ -34,6 +34,10 @@ import {
 import { roundCurrency } from '../../lib/taxCalculations';
 import { AccessDeniedView } from '../scaffold/AccessDeniedView';
 import { toast } from '../../context/ToastContext';
+import { BranchActionField } from '@/components/BranchActionField';
+import { useBranchAction } from '@/hooks/useBranchAction';
+
+const loadCommissionStaff = (branchId: string) => salonService.getStaff(branchId);
 
 export const StaffCommissionPage: React.FC = () => {
   const { user, activeBranchId, allBranches, demoDate } = useAuth();
@@ -68,6 +72,9 @@ export const StaffCommissionPage: React.FC = () => {
 
   // Modals
   const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
+  const [showGenerateForm, setShowGenerateForm] = useState(false);
+  const [generationStaffId, setGenerationStaffId] = useState('ALL');
+  const generationScope = useBranchAction(showGenerateForm, loadCommissionStaff);
   const [showBreakdownModal, setShowBreakdownModal] = useState<boolean>(false);
   const [showPaymentModal, setShowPaymentModal] = useState<boolean>(false);
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
@@ -179,17 +186,21 @@ export const StaffCommissionPage: React.FC = () => {
 
   // Generate Draft Preview
   const handleGeneratePreview = async () => {
+    if (user.role === 'SUPER_ADMIN' && !generationScope.validate()) return;
     try {
       setActionLoading(true);
       setFeedback(null);
       const preview = await salonService.generateCommissionPreview(
-        effectiveBranchId,
+        user.role === 'SUPER_ADMIN' ? generationScope.branchId : effectiveBranchId,
         startDate,
         endDate,
-        staffFilter !== 'ALL' ? staffFilter : undefined,
+        user.role === 'SUPER_ADMIN'
+          ? (generationStaffId !== 'ALL' ? generationStaffId : undefined)
+          : (staffFilter !== 'ALL' ? staffFilter : undefined),
         user
       );
       setActiveDraft(preview);
+      setShowGenerateForm(false);
       setShowPreviewModal(true);
       toast.success(`Draft preview generated for ${preview.statements.length} staff member(s)!`);
     } catch (err: any) {
@@ -405,7 +416,7 @@ export const StaffCommissionPage: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handleGeneratePreview}
+            onClick={() => user.role === 'SUPER_ADMIN' ? setShowGenerateForm(true) : handleGeneratePreview()}
             disabled={actionLoading}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl text-sm shadow-sm transition-all hover:shadow"
           >
@@ -606,7 +617,7 @@ export const StaffCommissionPage: React.FC = () => {
               sales attributions into an auditable run.
             </p>
             <button
-              onClick={handleGeneratePreview}
+              onClick={() => user.role === 'SUPER_ADMIN' ? setShowGenerateForm(true) : handleGeneratePreview()}
               className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl text-sm"
             >
               Generate Preview for Date Range
@@ -804,6 +815,27 @@ export const StaffCommissionPage: React.FC = () => {
       {/* ========================================================================= */}
       {/* MODAL 1: PREVIEW & FINALIZATION MODAL                                     */}
       {/* ========================================================================= */}
+      {showGenerateForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <form role="dialog" aria-modal="true" aria-label="Generate commission" className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 shadow-xl" onSubmit={(event) => { event.preventDefault(); handleGeneratePreview(); }}>
+            <h2 className="text-lg font-bold text-slate-900">Generate Commission</h2>
+            <p className="text-xs text-slate-500">Period: {startDate} to {endDate}</p>
+            <BranchActionField value={generationScope.branchId} disabled={actionLoading} onChange={(id) => { generationScope.setBranchId(id); setGenerationStaffId('ALL'); }} />
+            {generationScope.error && <p role="alert" className="text-xs text-rose-600">{generationScope.error}</p>}
+            <label className="block space-y-1 text-xs font-medium text-slate-700">
+              <span>Employee</span>
+              <select value={generationStaffId} disabled={!generationScope.ready || actionLoading} onChange={(event) => setGenerationStaffId(event.target.value)} className="w-full rounded-lg border border-slate-200 p-2 text-sm">
+                <option value="ALL">All employees in this branch</option>
+                {generationScope.data?.map((staff) => <option key={staff.id} value={staff.id}>{staff.name}</option>)}
+              </select>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button type="button" disabled={actionLoading} onClick={() => setShowGenerateForm(false)} className="rounded-lg border px-4 py-2 text-xs">Cancel</button>
+              <button type="submit" disabled={!generationScope.ready || actionLoading} className="rounded-lg bg-purple-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50">{actionLoading ? 'Generating...' : 'Generate Preview'}</button>
+            </div>
+          </form>
+        </div>
+      )}
       {showPreviewModal && activeDraft && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden">

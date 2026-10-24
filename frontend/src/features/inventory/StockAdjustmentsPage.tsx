@@ -1,3 +1,5 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useInventoryActionScope } from './useInventoryActionScope';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
@@ -162,9 +164,15 @@ export const StockAdjustmentsPage: React.FC = () => {
     });
   }, [movements, searchQuery, typeFilter]);
 
+  const actionScope = useInventoryActionScope(isAdjustModalOpen || isAuditModalOpen);
+  const changeActionBranch = (id: string) => {
+    actionScope.setBranchId(id);
+    setSelectedItemId(''); setAuditItemId(''); setAuditCountedQuantity(0);
+  };
+
   // Open Adjustment Modal
   const handleOpenAdjustModal = () => {
-    setSelectedItemId(items[0]?.id || '');
+    setSelectedItemId(actionScope.items[0]?.id || '');
     setAdjustmentType('DAMAGED_OUT');
     setAdjustQuantity(1);
     setAdjustReason('Damaged / Broken packaging');
@@ -173,11 +181,12 @@ export const StockAdjustmentsPage: React.FC = () => {
 
   const handleSaveAdjustment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!actionScope.validate()) return;
     if (!selectedItemId) {
       setErrorMessage('Please select a product.');
       return;
     }
-    const currentOnHand = stockMap[selectedItemId] ?? 0;
+    const currentOnHand = actionScope.stockMap[selectedItemId] ?? 0;
     if (adjustQuantity <= 0) {
       setErrorMessage('Quantity must be greater than 0.');
       return;
@@ -189,7 +198,7 @@ export const StockAdjustmentsPage: React.FC = () => {
 
     try {
       const input: CreateManualStockOutInput = {
-        branchId: selectedBranchId,
+        branchId: actionScope.branchId,
         itemId: selectedItemId,
         quantity: Number(adjustQuantity),
         reason: (adjustmentType as any) || 'DAMAGED_OUT',
@@ -211,22 +220,23 @@ export const StockAdjustmentsPage: React.FC = () => {
 
   // Open Audit Settlement Modal
   const handleOpenAuditModal = () => {
-    const first = items[0];
+    const first = actionScope.items[0];
     setAuditItemId(first?.id || '');
-    setAuditCountedQuantity(first ? (stockMap[first.id] ?? 0) : 0);
+    setAuditCountedQuantity(first ? (actionScope.stockMap[first.id] ?? 0) : 0);
     setAuditNotes('Physical cycle count reconciliation');
     setIsAuditModalOpen(true);
   };
 
   const handleSaveAudit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!actionScope.validate()) return;
     if (!auditItemId) return;
-    const currentExpected = stockMap[auditItemId] ?? 0;
+    const currentExpected = actionScope.stockMap[auditItemId] ?? 0;
     const variance = Number(auditCountedQuantity) - currentExpected;
 
     try {
       const input: CreateStockSettlementInput = {
-        branchId: selectedBranchId,
+        branchId: actionScope.branchId,
         countDate: new Date().toISOString().split('T')[0],
         notes: auditNotes,
         lines: [
@@ -446,6 +456,10 @@ export const StockAdjustmentsPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveAdjustment} className="space-y-4 pt-4">
+              <BranchActionField value={actionScope.branchId} onChange={changeActionBranch} disabled={false} />
+              {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+              {actionScope.loading && <p role="status" className="text-xs text-slate-500">Loading branch data...</p>}
+              <fieldset disabled={!actionScope.ready} className="space-y-4 disabled:opacity-50">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Select Product *
@@ -456,15 +470,16 @@ export const StockAdjustmentsPage: React.FC = () => {
                   onChange={(e) => setSelectedItemId(e.target.value)}
                   className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-hidden"
                 >
-                  {items.map((it) => (
+                  <option value="">Select a product</option>
+                  {actionScope.items.map((it) => (
                     <option key={it.id} value={it.id}>
-                      {it.name} ({it.sku}) — Stock On Hand: {stockMap[it.id] ?? 0} {it.purchaseUnit}
+                      {it.name} ({it.sku}) — Stock On Hand: {actionScope.stockMap[it.id] ?? 0} {it.purchaseUnit}
                     </option>
                   ))}
                 </select>
                 {selectedItemId && (
                   <div className="mt-1.5 text-xs text-[#0047AB] font-semibold">
-                    Current Stock on Hand: {stockMap[selectedItemId] ?? 0} Units
+                    Current Stock on Hand: {actionScope.stockMap[selectedItemId] ?? 0} Units
                   </div>
                 )}
               </div>
@@ -493,7 +508,7 @@ export const StockAdjustmentsPage: React.FC = () => {
                   <input
                     type="number"
                     min="1"
-                    max={stockMap[selectedItemId] ?? undefined}
+                    max={actionScope.stockMap[selectedItemId] ?? undefined}
                     value={adjustQuantity}
                     onChange={(e) => setAdjustQuantity(Number(e.target.value))}
                     className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-[#0047AB]"
@@ -529,7 +544,9 @@ export const StockAdjustmentsPage: React.FC = () => {
                   Confirm Adjustment
                 </button>
               </div>
-            </form>
+            
+              </fieldset>
+</form>
           </div>
         </div>
       )}
@@ -549,6 +566,10 @@ export const StockAdjustmentsPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveAudit} className="space-y-4 pt-4">
+              <BranchActionField value={actionScope.branchId} onChange={changeActionBranch} disabled={false} />
+              {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+              {actionScope.loading && <p role="status" className="text-xs text-slate-500">Loading branch data...</p>}
+              <fieldset disabled={!actionScope.ready} className="space-y-4 disabled:opacity-50">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Select Product *
@@ -558,11 +579,12 @@ export const StockAdjustmentsPage: React.FC = () => {
                   value={auditItemId}
                   onChange={(e) => {
                     setAuditItemId(e.target.value);
-                    setAuditCountedQuantity(stockMap[e.target.value] ?? 0);
+                    setAuditCountedQuantity(actionScope.stockMap[e.target.value] ?? 0);
                   }}
                   className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-hidden"
                 >
-                  {items.map((it) => (
+                  <option value="">Select a product</option>
+                  {actionScope.items.map((it) => (
                     <option key={it.id} value={it.id}>
                       {it.name} ({it.sku})
                     </option>
@@ -574,7 +596,7 @@ export const StockAdjustmentsPage: React.FC = () => {
                 <div>
                   <span className="text-[11px] font-semibold text-slate-500 uppercase">System Stock</span>
                   <div className="text-lg font-bold text-slate-900">
-                    {stockMap[auditItemId] ?? 0} Units
+                    {actionScope.stockMap[auditItemId] ?? 0} Units
                   </div>
                 </div>
 
@@ -594,7 +616,7 @@ export const StockAdjustmentsPage: React.FC = () => {
 
               {/* Variance Preview */}
               {(() => {
-                const exp = stockMap[auditItemId] ?? 0;
+                const exp = actionScope.stockMap[auditItemId] ?? 0;
                 const variance = Number(auditCountedQuantity) - exp;
                 return (
                   <div className={`p-3 rounded-lg text-xs font-semibold flex items-center justify-between ${
@@ -639,7 +661,9 @@ export const StockAdjustmentsPage: React.FC = () => {
                   Reconcile Count
                 </button>
               </div>
-            </form>
+            
+              </fieldset>
+</form>
           </div>
         </div>
       )}

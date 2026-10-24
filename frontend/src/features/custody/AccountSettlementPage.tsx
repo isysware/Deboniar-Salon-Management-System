@@ -1,3 +1,5 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useBranchAction } from '@/hooks/useBranchAction';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
@@ -138,16 +140,28 @@ export const AccountSettlementPage: React.FC = () => {
     loadData();
   }, [loadData]);
 
+  const loadSettlementAction = useCallback(async (branchId: string) => {
+    const drawers = await salonService.getCashDrawers(branchId, user.id);
+    const drawer = drawers.find((d) => d.branchId === branchId && d.custodianUserId === user.id && d.status === 'OPEN') || null;
+    if (!drawer) return { drawer, expected: 0 };
+    const statement = await salonService.getCashCustodyStatement({ branchId, userId: user.id, drawerId: drawer.id }, user);
+    return { drawer, expected: statement.summary.expectedCashInCustody || 0 };
+  }, [user]);
+  const actionScope = useBranchAction(true, loadSettlementAction);
+  const formDrawer = actionScope.data?.drawer;
+  const formExpectedCash = actionScope.data?.expected || 0;
+
   // Form Calculations
   const countedNum = parseFloat(countedCashInput) || 0;
   const retainedNum = parseFloat(retainedFloatInput) || 0;
   const handoverNum = Math.max(0, countedNum - retainedNum);
-  const varianceNum = countedNum - activeDrawerExpectedCash;
+  const varianceNum = countedNum - formExpectedCash;
 
   // Handle inline submit settlement
   const handleInlineSubmitSettlement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeDrawer) {
+    if (!actionScope.validate()) return;
+    if (!formDrawer) {
       const msg = 'No active cash drawer found for settlement.';
       setErrorMessage(msg);
       toast.error(msg);
@@ -176,8 +190,8 @@ export const AccountSettlementPage: React.FC = () => {
     setErrorMessage(null);
     try {
       const payload: CreateSettlementInput = {
-        drawerId: activeDrawer.id,
-        branchId: selectedBranchId,
+        drawerId: formDrawer.id,
+        branchId: actionScope.branchId,
         countedCash: countedNum,
         handoverAmount: handoverNum,
         retainedFloat: retainedNum,
@@ -195,6 +209,7 @@ export const AccountSettlementPage: React.FC = () => {
       setVarianceExplanation('');
       setSettlementNotes('');
       setShowSettleForm(false);
+      actionScope.refresh();
       await loadData();
     } catch (err: any) {
       const msg = err.message || 'Failed to submit settlement.';
@@ -402,12 +417,16 @@ export const AccountSettlementPage: React.FC = () => {
         </div>
 
         <div className="p-6">
-          {!hasUnsettledCash && !showSettleForm ? (
+          {!isSuperAdmin && !hasUnsettledCash && !showSettleForm ? (
             <div className="py-8 text-center text-slate-500 text-sm font-medium">
               Nothing to settle — you have no unsettled cash right now.
             </div>
           ) : (
             <form onSubmit={handleInlineSubmitSettlement} className="space-y-4">
+              <BranchActionField value={actionScope.branchId} disabled={isSubmitting} onChange={(id) => { actionScope.setBranchId(id); setCountedCashInput(''); setRetainedFloatInput('0'); setVarianceExplanation(''); }} />
+              {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+              {actionScope.ready && !formDrawer && <p role="status" className="text-xs text-slate-500">No open cash drawer in your custody for this branch.</p>}
+              <fieldset disabled={!actionScope.ready || !formDrawer} className="space-y-4 disabled:opacity-50">
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 {/* Expected Cash in drawer */}
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-3.5">
@@ -415,7 +434,7 @@ export const AccountSettlementPage: React.FC = () => {
                     Expected Cash in Drawer
                   </span>
                   <span className="text-base font-extrabold text-[#15803D] tabular-nums">
-                    {formatPKR(activeDrawerExpectedCash)}
+                    {formatPKR(formExpectedCash)}
                   </span>
                 </div>
 
@@ -521,7 +540,9 @@ export const AccountSettlementPage: React.FC = () => {
                   </button>
                 )}
               </div>
-            </form>
+            
+              </fieldset>
+</form>
           )}
         </div>
       </div>

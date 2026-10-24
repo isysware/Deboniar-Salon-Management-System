@@ -1,3 +1,5 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useBranchAction } from '@/hooks/useBranchAction';
 import React, { useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { salonService } from '@/services';
@@ -117,16 +119,25 @@ function parseCSVText(text: string): string[][] {
   return lines.map(parseCSVLine);
 }
 
+const loadImportBranch = async (branchId: string) => {
+  const [services, packages] = await Promise.all([salonService.getServices(branchId), salonService.getPackages(branchId)]);
+  return { services, packages };
+};
+
 export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> = ({
   isOpen,
   onClose,
   initialType = 'SERVICES',
-  branchId,
-  existingServices,
-  existingPackages,
+  branchId: readBranchId,
+  existingServices: readServices,
+  existingPackages: readPackages,
   onSuccess,
 }) => {
   const { user } = useAuth();
+  const actionScope = useBranchAction(isOpen, loadImportBranch);
+  const branchId = actionScope.branchId;
+  const existingServices = actionScope.data?.services || [];
+  const existingPackages = actionScope.data?.packages || [];
   const [activeTab, setActiveTab] = useState<'SERVICES' | 'PACKAGES'>(initialType);
   const [rawText, setRawText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
@@ -458,6 +469,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
 
   // ── Import Submission ─────────────────────────────────────────────────────
   const handleConfirmImport = async () => {
+    if (!actionScope.validate()) return;
     if (activeTab === 'SERVICES') {
       const validRows = parsedServices.filter((s) => s.isValid);
       if (validRows.length === 0) {
@@ -555,6 +567,9 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
         </DialogHeader>
 
         {/* TAB SELECTOR: SERVICES vs PACKAGES */}
+        <BranchActionField value={branchId} disabled={isSubmitting} onChange={(id) => { actionScope.setBranchId(id); handleTabChange(activeTab); }} />
+        {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+        <fieldset disabled={!actionScope.ready}>
         <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200">
             <TabsList className="bg-slate-100 p-1">
@@ -785,6 +800,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
           </div>
         </Tabs>
 
+        </fieldset>
         <DialogFooter className="mt-4 pt-3 border-t border-slate-200">
           <Button variant="outline" size="sm" onClick={onClose} disabled={isSubmitting}>
             Cancel
@@ -793,7 +809,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
             variant="primary"
             size="sm"
             onClick={handleConfirmImport}
-            disabled={isSubmitting || currentValidCount === 0}
+            disabled={isSubmitting || !actionScope.ready || currentValidCount === 0}
             leftIcon={
               isSubmitting ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />

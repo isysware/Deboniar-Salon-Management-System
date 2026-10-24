@@ -1,3 +1,5 @@
+import { useInventoryActionScope } from './useInventoryActionScope';
+import { BranchActionField } from '@/components/BranchActionField';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
@@ -75,6 +77,7 @@ export const SuppliersVendorsPage: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  const [formBranchId, setFormBranchId] = useState(isSuperAdmin ? '' : user.branchId || '');
   // Add/Edit Supplier Modal
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState<boolean>(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
@@ -190,6 +193,7 @@ export const SuppliersVendorsPage: React.FC = () => {
 
   // Open Add Supplier Modal
   const handleOpenAddModal = () => {
+    setFormBranchId(isSuperAdmin ? '' : user.branchId || '');
     setEditingSupplier(null);
     setSupplierFormData({
       name: '',
@@ -221,6 +225,7 @@ export const SuppliersVendorsPage: React.FC = () => {
 
   const handleSaveSupplier = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingSupplier && (!formBranchId || !allBranches.some((b) => b.id === formBranchId))) { toast.error('Please select a branch for this supplier.'); return; }
     if (!supplierFormData.name?.trim()) {
       const msg = 'Vendor name is required.';
       setErrorMessage(msg);
@@ -249,7 +254,7 @@ export const SuppliersVendorsPage: React.FC = () => {
       } else {
         await salonService.createSupplier(
           {
-            branchId: selectedBranchId,
+            branchId: formBranchId,
             name: supplierFormData.name,
             companyName: supplierFormData.companyName || supplierFormData.name,
             contactPerson: supplierFormData.contactPerson,
@@ -276,6 +281,9 @@ export const SuppliersVendorsPage: React.FC = () => {
     }
   };
 
+  const paymentScope = useInventoryActionScope(isPayModalOpen);
+  const paymentSupplier = paymentScope.suppliers.find((supplier) => supplier.id === payingSupplier?.id);
+
   // Open Pay Supplier Modal
   const handleOpenPayModal = (s: Supplier) => {
     const bal = s.currentPayable ?? s.currentBalance ?? 0;
@@ -293,15 +301,17 @@ export const SuppliersVendorsPage: React.FC = () => {
 
   const handleSubmitPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!paymentScope.validate()) return;
+    if (!paymentSupplier) { toast.error('This supplier is not available in the selected branch.'); return; }
     if (!payingSupplier || paymentBusy.current) return;
-    if (!Number.isFinite(payAmount) || payAmount <= 0 || payAmount > (payingSupplier.currentPayable ?? payingSupplier.currentBalance ?? 0)) {
+    if (!Number.isFinite(payAmount) || payAmount <= 0 || payAmount > (paymentSupplier.currentPayable ?? paymentSupplier.currentBalance ?? 0)) {
       const msg = 'Enter a positive amount within the outstanding payable.';
       setErrorMessage(msg);
       toast.error(msg);
       return;
     }
 
-    if (payMethod === 'CASH' && !activeDrawer) {
+    if (payMethod === 'CASH' && !paymentScope.activeDrawer) {
       const msg = 'Payment from Cash Drawer requires an OPEN active cash drawer in your custody.';
       setErrorMessage(msg);
       toast.error(msg);
@@ -319,19 +329,19 @@ export const SuppliersVendorsPage: React.FC = () => {
     try {
       const input: PaySupplierInput = {
         idempotencyKey: paymentKey.current,
-        branchId: selectedBranchId,
-        supplierId: payingSupplier.id,
+        branchId: paymentScope.branchId,
+        supplierId: paymentSupplier.id,
         amount: Number(payAmount),
         paymentDate: payDate,
         paymentMethod: payMethod,
         paymentAccountId: payMethod === 'ONLINE' ? payAccountId : undefined,
-        payerDrawerId: payMethod === 'CASH' ? activeDrawer?.id : undefined,
+        payerDrawerId: payMethod === 'CASH' ? paymentScope.activeDrawer?.id : undefined,
         reference: payReference,
         notes: payNotes,
       };
 
       await salonService.paySupplier(input, user);
-      const msg = `Payment voucher of PKR ${formatPKR(payAmount)} recorded for ${payingSupplier.name}. Khata balance updated.`;
+      const msg = `Payment voucher of PKR ${formatPKR(payAmount)} recorded for ${paymentSupplier.name}. Khata balance updated.`;
       setSuccessMessage(msg);
       toast.success(msg);
       setIsPayModalOpen(false);
@@ -1164,6 +1174,7 @@ export const SuppliersVendorsPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveSupplier} className="space-y-4 pt-4">
+              {!editingSupplier && <BranchActionField value={formBranchId} onChange={setFormBranchId} />}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -1274,6 +1285,10 @@ export const SuppliersVendorsPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmitPayment} className="space-y-4 pt-4">
+              <BranchActionField value={paymentScope.branchId} disabled={paymentSubmitting} onChange={(id) => { paymentScope.setBranchId(id); setPayAccountId(''); setPayAmount(0); }} />
+              {paymentScope.error && <p role="alert" className="text-xs text-rose-600">{paymentScope.error}</p>}
+              {paymentScope.ready && !paymentSupplier && <p role="alert" className="text-xs text-rose-600">Select the branch belonging to this supplier.</p>}
+              <fieldset disabled={!paymentScope.ready || !paymentSupplier} className="space-y-4 disabled:opacity-50">
               {errorMessage && <p role="alert" className="text-xs text-rose-700">{errorMessage}</p>}
               <label className="block text-xs font-semibold">Payment Date *<input type="date" required value={payDate} onChange={(e) => setPayDate(e.target.value)} className="block w-full border rounded-lg px-3 py-2" /></label>
               <label className="block text-xs font-semibold">Notes<input value={payNotes} onChange={(e) => setPayNotes(e.target.value)} className="block w-full border rounded-lg px-3 py-2" /></label>
@@ -1316,7 +1331,8 @@ export const SuppliersVendorsPage: React.FC = () => {
                     onChange={(e) => setPayAccountId(e.target.value)}
                     className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-hidden"
                   >
-                    {paymentAccounts.map((a) => (
+                    <option value="">Select a bank / online account</option>
+                    {paymentScope.accounts.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.name} ({a.bankName || 'Bank'}) — PKR {formatPKR(a.currentBalance || 0)}
                       </option>
@@ -1327,8 +1343,8 @@ export const SuppliersVendorsPage: React.FC = () => {
 
               {payMethod === 'CASH' && (
                 <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 text-xs text-blue-900">
-                  {activeDrawer ? (
-                    <div>Disbursing from active drawer <strong>#{activeDrawer.drawerName}</strong></div>
+                  {paymentScope.activeDrawer ? (
+                    <div>Disbursing from active drawer <strong>#{paymentScope.activeDrawer.drawerName}</strong></div>
                   ) : (
                     <div className="text-rose-700 font-bold">No active drawer open! Open shift custody first.</div>
                   )}
@@ -1363,7 +1379,9 @@ export const SuppliersVendorsPage: React.FC = () => {
                   <span>{paymentSubmitting ? 'Posting?' : 'Confirm Payment'}</span>
                 </button>
               </div>
-            </form>
+            
+              </fieldset>
+</form>
           </div>
         </div>
       )}

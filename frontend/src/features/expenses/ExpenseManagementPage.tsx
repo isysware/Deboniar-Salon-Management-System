@@ -1,3 +1,5 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useBranchAction } from '@/hooks/useBranchAction';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { salonService } from '@/services';
@@ -54,6 +56,11 @@ import {
   Filter,
   Check,
 } from 'lucide-react';
+
+const loadExpenseAction = async (branchId: string) => {
+  const [categories, accounts, drawers] = await Promise.all([salonService.getExpenseCategories(branchId), salonService.getPaymentAccounts(branchId), salonService.getCashDrawers(branchId)]);
+  return { categories, accounts, drawers };
+};
 
 export const ExpenseManagementPage: React.FC = () => {
   const { user, activeBranchId, allBranches, demoDate } = useAuth();
@@ -277,7 +284,7 @@ export const ExpenseManagementPage: React.FC = () => {
       setFormNotes(draftToEdit.notes || '');
     } else {
       setEditingExpenseId(null);
-      const defaultBranch = selectedBranchId !== 'ALL' ? selectedBranchId : user.branchId || '';
+      const defaultBranch = isSuperAdmin ? '' : user.branchId || '';
       setFormBranchId(defaultBranch);
       setFormExpenseDate(demoDate || new Date().toISOString().split('T')[0]);
       setFormCategory(categories.find((c) => c.branchId === defaultBranch && c.isActive)?.name || 'Supplies');
@@ -295,6 +302,10 @@ export const ExpenseManagementPage: React.FC = () => {
 
   // Submit Save Draft
   const handleSaveDraft = async () => {
+    if (!formBranchId || !allBranches.some((branch) => branch.id === formBranchId)) {
+      toast.error('Please select a branch for this expense.');
+      return;
+    }
     setFormError(null);
     const amountNum = parseFloat(formAmount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
@@ -383,6 +394,10 @@ export const ExpenseManagementPage: React.FC = () => {
 
   // Submit Post Expense
   const handlePostExpense = async () => {
+    if (!formBranchId || !allBranches.some((branch) => branch.id === formBranchId)) {
+      toast.error('Please select a branch for this expense.');
+      return;
+    }
     setFormError(null);
     const amountNum = parseFloat(formAmount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
@@ -502,8 +517,24 @@ export const ExpenseManagementPage: React.FC = () => {
     }
   };
 
+  const categoryScope = useBranchAction(isCategoryModalOpen, loadExpenseAction);
+  const floatScope = useBranchAction(isFloatTransferModalOpen, loadExpenseAction);
+
+  const [expenseChoices, setExpenseChoices] = useState<{ branchId: string; categories: ExpenseCategoryItem[]; accounts: PaymentAccount[] }>({ branchId: '', categories: [], accounts: [] });
+  useEffect(() => {
+    if (!isAddExpenseModalOpen || !formBranchId || formBranchId === 'ALL') return;
+    let cancelled = false;
+    loadExpenseAction(formBranchId).then((data) => {
+      if (!cancelled) setExpenseChoices({ branchId: formBranchId, categories: data.categories, accounts: data.accounts.filter((a) => a.isActive) });
+    }).catch((error) => { if (!cancelled) setFormError(error.message || 'Unable to load branch choices.'); });
+    return () => { cancelled = true; };
+  }, [isAddExpenseModalOpen, formBranchId]);
+  const expenseCategories = expenseChoices.branchId === formBranchId ? expenseChoices.categories : [];
+  const expenseAccounts = expenseChoices.branchId === formBranchId ? expenseChoices.accounts : [];
+
   // Create Category
   const handleCreateCategory = async () => {
+    if (!categoryScope.validate()) return;
     setCategoryModalError(null);
     if (!newCategoryName.trim()) {
       const msg = 'Category name is required.';
@@ -511,11 +542,12 @@ export const ExpenseManagementPage: React.FC = () => {
       toast.error(msg);
       return;
     }
-    const targetBranch = selectedBranchId !== 'ALL' ? selectedBranchId : user.branchId || '';
+    const targetBranch = categoryScope.branchId;
     try {
       await salonService.createExpenseCategory(targetBranch, newCategoryName.trim(), newCategoryDescription.trim(), user);
       setNewCategoryName('');
       setNewCategoryDescription('');
+      categoryScope.refresh();
       toast.success('Category created successfully.');
       setSuccessMessage('Category created successfully.');
       const freshCats = await salonService.getExpenseCategories(selectedBranchId, user);
@@ -541,6 +573,8 @@ export const ExpenseManagementPage: React.FC = () => {
 
   // Handle Cash Float Transfer
   const handleTransferFloat = async () => {
+    if (!floatScope.validate()) return;
+    if (!floatScope.data?.drawers.some((drawer) => drawer.status === 'OPEN' && drawer.custodianUserId === floatTargetUserId && drawer.branchId === floatScope.branchId)) { toast.error('Please select a custodian in this branch.'); return; }
     setFloatModalError(null);
     const amountNum = parseFloat(floatAmount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
@@ -555,7 +589,7 @@ export const ExpenseManagementPage: React.FC = () => {
       toast.error(msg);
       return;
     }
-    const targetBranch = selectedBranchId !== 'ALL' ? selectedBranchId : user.branchId || '';
+    const targetBranch = floatScope.branchId;
 
     setIsSubmitting(true);
     try {
@@ -1117,10 +1151,8 @@ export const ExpenseManagementPage: React.FC = () => {
                 value={formBranchId}
                 onValueChange={(val) => {
                   setFormBranchId(val);
-                  const branchCats = categories.filter((c) => c.branchId === val && c.isActive);
-                  if (branchCats.length > 0) setFormCategory(branchCats[0].name);
-                  const branchAccs = paymentAccounts.filter((a) => a.branchId === val);
-                  if (branchAccs.length > 0) setFormPaymentAccountId(branchAccs[0].id);
+                  setFormCategory('');
+                  setFormPaymentAccountId('');
                 }}
                 disabled={!isSuperAdmin}
               >
@@ -1156,7 +1188,7 @@ export const ExpenseManagementPage: React.FC = () => {
                   <SelectValue placeholder="Select Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories
+                  {expenseCategories
                     .filter((c) => c.branchId === formBranchId)
                     .map((c) => (
                       <SelectItem key={c.id} value={c.name}>
@@ -1232,7 +1264,7 @@ export const ExpenseManagementPage: React.FC = () => {
                     <SelectValue placeholder="Choose Account" />
                   </SelectTrigger>
                   <SelectContent>
-                    {paymentAccounts
+                    {expenseAccounts
                       .filter((a) => a.branchId === formBranchId)
                       .map((a) => (
                         <SelectItem key={a.id} value={a.id}>
@@ -1554,6 +1586,8 @@ export const ExpenseManagementPage: React.FC = () => {
           )}
 
           <div className="space-y-4 py-2 text-xs">
+            <BranchActionField value={categoryScope.branchId} onChange={categoryScope.setBranchId} />
+            {categoryScope.error && <p role="alert" className="text-rose-600">{categoryScope.error}</p>}
             {/* Add Category Form */}
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
               <span className="font-semibold text-slate-800 text-xs">Add New Category</span>
@@ -1664,6 +1698,8 @@ export const ExpenseManagementPage: React.FC = () => {
               <strong>Notice:</strong> This internal custody transfer updates the custodian cash ledger atomically. It does <em>not</em> create an invoice or an operating expense.
             </div>
 
+            <BranchActionField value={floatScope.branchId} disabled={isSubmitting} onChange={(id) => { floatScope.setBranchId(id); setFloatTargetUserId(''); }} />
+            {floatScope.error && <p role="alert" className="text-rose-600">{floatScope.error}</p>}
             {/* Target Custodian */}
             <div className="space-y-1">
               <label className="font-medium text-slate-700">Target Drawer Custodian</label>
@@ -1672,8 +1708,8 @@ export const ExpenseManagementPage: React.FC = () => {
                   <SelectValue placeholder="Select user with open drawer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {cashDrawers
-                    .filter((d) => d.status === 'OPEN' && (selectedBranchId === 'ALL' || d.branchId === selectedBranchId))
+                  {(floatScope.data?.drawers || [])
+                    .filter((d) => d.status === 'OPEN' && d.branchId === floatScope.branchId)
                     .map((d) => (
                       <SelectItem key={d.custodianUserId} value={d.custodianUserId}>
                         {d.custodianName} — In Custody: {formatCurrency(d.expectedInDrawer)}

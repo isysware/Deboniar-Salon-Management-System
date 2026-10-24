@@ -1,3 +1,6 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useBranchAction } from '@/hooks/useBranchAction';
+import { useAuth } from '@/context/AuthContext';
 import React, { useEffect, useMemo, useState } from 'react';
 import { salonService } from '../../services';
 import {
@@ -39,7 +42,17 @@ const typeBadge: Record<PayrollAdjustmentType, string> = {
  * Payroll inputs beside attendance/overtime (payroll.md §3.7–3.8) and the combined monthly view.
  * Every change here only affects DRAFT previews; a finalized month is locked by the API.
  */
+const loadPayrollAction = async (branchId: string) => {
+  const [staff, accounts, drawers] = await Promise.all([salonService.getStaff(branchId), salonService.getOnlineAccounts(branchId), salonService.getCashDrawers(branchId)]);
+  return { staff, accounts, drawers };
+};
+
 export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, staffList, onlineAccounts, hasOpenDrawer, onFeedback }) => {
+  const { user } = useAuth();
+  const allowanceScope = useBranchAction(view === 'INPUTS', loadPayrollAction);
+  const adjustmentScope = useBranchAction(view === 'INPUTS', loadPayrollAction);
+  const advanceScope = useBranchAction(view === 'ADVANCES', loadPayrollAction);
+  const advanceHasDrawer = !!advanceScope.data?.drawers.some((drawer) => drawer.branchId === advanceScope.branchId && drawer.custodianUserId === user?.id && drawer.status === 'OPEN');
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<MonthlyPaySummary | null>(null);
   const [allowances, setAllowances] = useState<StaffAllowance[]>([]);
@@ -179,7 +192,9 @@ export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, sta
   if (view === 'INPUTS') {
     const addAllowance = async (e: React.FormEvent) => {
       e.preventDefault();
-      const staffId = allowanceForm.staffId || firstStaff;
+      if (!allowanceScope.validate()) return;
+      const staffId = allowanceForm.staffId;
+      if (!allowanceScope.data?.staff.some((staff) => staff.id === staffId && staff.isActive)) { onFeedback('error', 'Please select an employee in this branch.'); return; }
       const ok = await run(
         () => salonService.createStaffAllowance({ staffId, name: allowanceForm.name.trim(), amount: Number(allowanceForm.amount) }),
         `Recurring allowance added for ${staffName(staffId)}.`
@@ -188,7 +203,9 @@ export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, sta
     };
     const addAdjustment = async (e: React.FormEvent) => {
       e.preventDefault();
-      const staffId = adjForm.staffId || firstStaff;
+      if (!adjustmentScope.validate()) return;
+      const staffId = adjForm.staffId;
+      if (!adjustmentScope.data?.staff.some((staff) => staff.id === staffId && staff.isActive)) { onFeedback('error', 'Please select an employee in this branch.'); return; }
       const ok = await run(
         () => salonService.createPayrollAdjustment({
           staffId, month, type: adjForm.type, title: adjForm.title.trim(), amount: Number(adjForm.amount), notes: adjForm.notes || undefined,
@@ -205,14 +222,20 @@ export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, sta
             <h3 className="text-base font-bold text-slate-900">Recurring Monthly Allowances</h3>
             <p className="text-xs text-slate-500 mt-1">Added to every payslip while active (transport, food, mobile…).</p>
           </div>
-          <form onSubmit={addAllowance} className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-slate-100">
-            <select className={input} value={allowanceForm.staffId || firstStaff} onChange={(e) => setAllowanceForm({ ...allowanceForm, staffId: e.target.value })}>
-              {activeStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          <form onSubmit={addAllowance} className="p-5 space-y-3 border-b border-slate-100">
+            <BranchActionField value={allowanceScope.branchId} disabled={busy} onChange={(id) => { allowanceScope.setBranchId(id); setAllowanceForm((prev) => ({ ...prev, staffId: '' })); }} />
+            {allowanceScope.error && <p role="alert" className="text-xs text-rose-600">{allowanceScope.error}</p>}
+            <fieldset disabled={!allowanceScope.ready || busy} className="grid grid-cols-1 sm:grid-cols-2 gap-3 disabled:opacity-50">
+            <select className={input} value={allowanceForm.staffId} onChange={(e) => setAllowanceForm({ ...allowanceForm, staffId: e.target.value })}>
+              <option value="">Select employee</option>
+              {(allowanceScope.data?.staff || []).filter((staff) => staff.isActive).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <input className={input} placeholder="Name (e.g. Transport)" required value={allowanceForm.name} onChange={(e) => setAllowanceForm({ ...allowanceForm, name: e.target.value })} />
             <input className={input} type="number" min="1" step="0.01" placeholder="Amount / month" required value={allowanceForm.amount} onChange={(e) => setAllowanceForm({ ...allowanceForm, amount: e.target.value })} />
             <button disabled={busy} className={`${primaryBtn} justify-center`}><Plus className="w-3.5 h-3.5" /> Add Allowance</button>
-          </form>
+          
+            </fieldset>
+</form>
           <table className="report-records w-full text-xs">
             <thead className="bg-slate-100/70 text-slate-600 font-semibold">
               <tr><th className={th}>Employee</th><th className={th}>Allowance</th><th className={`${th} text-right`}>Amount</th><th className={`${th} text-right`}>Status</th></tr>
@@ -245,9 +268,13 @@ export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, sta
             <h3 className="text-base font-bold text-slate-900">One-off Adjustments — {month}</h3>
             <p className="text-xs text-slate-500 mt-1">Bonus, extra allowance or deduction for this month only. Locked once the month is finalized.</p>
           </div>
-          <form onSubmit={addAdjustment} className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 border-b border-slate-100">
-            <select className={input} value={adjForm.staffId || firstStaff} onChange={(e) => setAdjForm({ ...adjForm, staffId: e.target.value })}>
-              {activeStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          <form onSubmit={addAdjustment} className="p-5 space-y-3 border-b border-slate-100">
+            <BranchActionField value={adjustmentScope.branchId} disabled={busy} onChange={(id) => { adjustmentScope.setBranchId(id); setAdjForm((prev) => ({ ...prev, staffId: '' })); }} />
+            {adjustmentScope.error && <p role="alert" className="text-xs text-rose-600">{adjustmentScope.error}</p>}
+            <fieldset disabled={!adjustmentScope.ready || busy} className="grid grid-cols-1 sm:grid-cols-2 gap-3 disabled:opacity-50">
+            <select className={input} value={adjForm.staffId} onChange={(e) => setAdjForm({ ...adjForm, staffId: e.target.value })}>
+              <option value="">Select employee</option>
+              {(adjustmentScope.data?.staff || []).filter((staff) => staff.isActive).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <select className={input} value={adjForm.type} onChange={(e) => setAdjForm({ ...adjForm, type: e.target.value as PayrollAdjustmentType })}>
               <option value="BONUS">Bonus (+)</option>
@@ -260,7 +287,9 @@ export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, sta
             <div className="sm:col-span-2 flex justify-end">
               <button disabled={busy} className={primaryBtn}><Plus className="w-3.5 h-3.5" /> Add Adjustment</button>
             </div>
-          </form>
+          
+            </fieldset>
+</form>
           <table className="report-records w-full text-xs">
             <thead className="bg-slate-100/70 text-slate-600 font-semibold">
               <tr><th className={th}>Employee</th><th className={th}>Type</th><th className={th}>Title</th><th className={`${th} text-right`}>Amount</th><th className={`${th} text-right`}></th></tr>
@@ -296,7 +325,9 @@ export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, sta
   // ── Salary advances ──────────────────────────────────────────────────────
   const issue = async (e: React.FormEvent) => {
     e.preventDefault();
-    const staffId = advForm.staffId || firstStaff;
+      if (!advanceScope.validate()) return;
+    const staffId = advForm.staffId;
+      if (!advanceScope.data?.staff.some((staff) => staff.id === staffId && staff.isActive)) { onFeedback('error', 'Please select an employee in this branch.'); return; }
     const ok = await run(
       () => salonService.issueSalaryAdvance({
         staffId, amount: Number(advForm.amount), recoveryPerMonth: advForm.recoveryPerMonth ? Number(advForm.recoveryPerMonth) : undefined,
@@ -326,9 +357,13 @@ export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, sta
             </p>
           </div>
         </div>
-        <form onSubmit={issue} className="p-5 grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          <select className={input} value={advForm.staffId || firstStaff} onChange={(e) => setAdvForm({ ...advForm, staffId: e.target.value })}>
-            {activeStaff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        <form onSubmit={issue} className="p-5 space-y-3 border-b border-slate-100">
+            <BranchActionField value={advanceScope.branchId} disabled={busy} onChange={(id) => { advanceScope.setBranchId(id); setAdvForm((prev) => ({ ...prev, staffId: '', onlineAccountId: '' })); }} />
+            {advanceScope.error && <p role="alert" className="text-xs text-rose-600">{advanceScope.error}</p>}
+            <fieldset disabled={!advanceScope.ready || busy} className="grid grid-cols-1 sm:grid-cols-2 gap-3 disabled:opacity-50">
+          <select className={input} value={advForm.staffId} onChange={(e) => setAdvForm({ ...advForm, staffId: e.target.value })}>
+              <option value="">Select employee</option>
+            {(advanceScope.data?.staff || []).filter((staff) => staff.isActive).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <input className={input} type="number" min="1" step="0.01" placeholder="Advance amount" required value={advForm.amount} onChange={(e) => setAdvForm({ ...advForm, amount: e.target.value })} />
           <input className={input} type="number" min="1" step="0.01" placeholder="Recover / month (default all)" value={advForm.recoveryPerMonth} onChange={(e) => setAdvForm({ ...advForm, recoveryPerMonth: e.target.value })} />
@@ -340,16 +375,18 @@ export const PayrollExtrasPanel: React.FC<Props> = ({ view, branchId, month, sta
           {advForm.method === 'ONLINE' ? (
             <select className={input} required value={advForm.onlineAccountId} onChange={(e) => setAdvForm({ ...advForm, onlineAccountId: e.target.value })}>
               <option value="">Select account…</option>
-              {onlineAccounts.filter((a) => a.isActive !== false).map((a) => <option key={a.id} value={a.id}>{a.accountName} (Rs. {a.currentBalance.toLocaleString()})</option>)}
+              {(advanceScope.data?.accounts || []).filter((a) => a.isActive !== false).map((a) => <option key={a.id} value={a.id}>{a.accountName} (Rs. {a.currentBalance.toLocaleString()})</option>)}
             </select>
           ) : (
-            <div className={`text-[11px] self-center ${hasOpenDrawer ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {hasOpenDrawer ? 'Paid from your open drawer' : 'Open a cash drawer first'}
+            <div className={`text-[11px] self-center ${advanceHasDrawer ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {advanceHasDrawer ? 'Paid from your open drawer' : 'Open a cash drawer first'}
             </div>
           )}
           <input className={`${input} sm:col-span-2 lg:col-span-5`} placeholder="Reason" required value={advForm.reason} onChange={(e) => setAdvForm({ ...advForm, reason: e.target.value })} />
           <button disabled={busy} className={`${primaryBtn} justify-center`}><Plus className="w-3.5 h-3.5" /> Issue Advance</button>
-        </form>
+        
+            </fieldset>
+</form>
       </div>
 
       <div className={card}>

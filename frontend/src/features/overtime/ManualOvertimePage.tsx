@@ -1,3 +1,5 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useBranchAction } from '@/hooks/useBranchAction';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { salonService } from '../../services';
@@ -25,6 +27,8 @@ import { roundCurrency } from '../../lib/taxCalculations';
 import { AccessDeniedView } from '../scaffold/AccessDeniedView';
 import { toast } from '../../context/ToastContext';
 
+const loadOvertimeAction = async (branchId: string) => ({ staff: await salonService.getStaff(branchId) });
+
 export const ManualOvertimePage: React.FC = () => {
   const { user, activeBranchId, allBranches, demoDate } = useAuth();
 
@@ -51,6 +55,7 @@ export const ManualOvertimePage: React.FC = () => {
 
   // Modals
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const actionScope = useBranchAction(showAddModal, loadOvertimeAction);
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [showApproveModal, setShowApproveModal] = useState<boolean>(false);
   const [showRejectModal, setShowRejectModal] = useState<boolean>(false);
@@ -160,7 +165,7 @@ export const ManualOvertimePage: React.FC = () => {
   // Add form effective hourly rate & amount preview
   const addFormPreview = useMemo(() => {
     if (!addForm.staffId) return null;
-    const staff = staffList.find((s) => s.id === addForm.staffId);
+    const staff = actionScope.data?.staff.find((s) => s.id === addForm.staffId);
     if (!staff) return null;
     const rate = Number(staff.overtimeHourlyRate ?? 0);
     const hours = (addForm.minutes || 0) / 60;
@@ -170,11 +175,12 @@ export const ManualOvertimePage: React.FC = () => {
       hours: hours.toFixed(2),
       estimatedAmount,
     };
-  }, [addForm.staffId, addForm.minutes, staffList]);
+  }, [addForm.staffId, addForm.minutes, actionScope.data]);
 
   // Handle Add Overtime
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!actionScope.validate()) return;
     if (!addForm.staffId) {
       toast.error('Please select an employee.');
       setFeedbackMsg({ type: 'error', text: 'Please select an employee.' });
@@ -187,15 +193,19 @@ export const ManualOvertimePage: React.FC = () => {
     }
 
     try {
-      const selectedStaff = staffList.find((s) => s.id === addForm.staffId);
-      const bId = selectedStaff?.branchId || effectiveBranchId;
+      const selectedStaff = actionScope.data?.staff.find((s) => s.id === addForm.staffId);
+      if (!selectedStaff || selectedStaff.branchId !== actionScope.branchId) {
+        toast.error('Please select an employee in this branch.');
+        return;
+      }
+      const bId = actionScope.branchId;
       const notes = addForm.isIntentionalAdditional
         ? `${addForm.notes ? addForm.notes + ' | ' : ''}INTENTIONAL_ADDITIONAL`
         : addForm.notes;
 
       const res = await salonService.createOvertime(
         {
-          branchId: bId === 'ALL' ? staffList[0]?.branchId : bId,
+          branchId: bId,
           staffId: addForm.staffId,
           date: addForm.date,
           minutes: Number(addForm.minutes),
@@ -805,6 +815,9 @@ export const ManualOvertimePage: React.FC = () => {
             </div>
 
             <form onSubmit={handleAddSubmit} className="p-5 space-y-4">
+              <BranchActionField value={actionScope.branchId} onChange={(id) => { actionScope.setBranchId(id); setAddForm((prev) => ({ ...prev, staffId: '' })); }} />
+              {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+              <fieldset disabled={!actionScope.ready} className="space-y-4 disabled:opacity-50">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Select Employee *</label>
                 <select
@@ -814,7 +827,7 @@ export const ManualOvertimePage: React.FC = () => {
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
                 >
                   <option value="">-- Choose Staff Member --</option>
-                  {staffList.map((s) => (
+                  {(actionScope.data?.staff || []).map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} ({s.employeeCode}) • Rate: Rs. {(s.overtimeHourlyRate ?? 0).toLocaleString()}/hr
                     </option>
@@ -917,7 +930,9 @@ export const ManualOvertimePage: React.FC = () => {
                   Submit Overtime
                 </button>
               </div>
-            </form>
+            
+              </fieldset>
+</form>
           </div>
         </div>
       )}

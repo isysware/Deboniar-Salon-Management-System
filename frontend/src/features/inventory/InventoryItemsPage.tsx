@@ -1,3 +1,4 @@
+import { BranchActionField } from '@/components/BranchActionField';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
@@ -59,6 +60,8 @@ export const InventoryItemsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [stockStatusFilter, setStockStatusFilter] = useState<'ALL' | 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK'>('ALL');
+
+  const [formBranchId, setFormBranchId] = useState(isSuperAdmin ? '' : user.branchId || '');
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
@@ -194,6 +197,7 @@ export const InventoryItemsPage: React.FC = () => {
 
   // Modal Handlers
   const handleOpenAddModal = () => {
+    setFormBranchId(isSuperAdmin ? '' : user.branchId || '');
     setEditingItem(null);
     setFormData({
       name: '',
@@ -233,6 +237,10 @@ export const InventoryItemsPage: React.FC = () => {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingItem && (!formBranchId || formBranchId === 'ALL' || !allBranches.some((b) => b.id === formBranchId))) {
+      toast.error('Please select a branch for this product.');
+      return;
+    }
     if (!formData.name?.trim()) {
       toast.error('Product name is required.');
       return;
@@ -265,7 +273,7 @@ export const InventoryItemsPage: React.FC = () => {
 
         await salonService.createInventoryItem(
           {
-            branchAvailability: [selectedBranchId],
+            branchAvailability: [formBranchId],
             name: formData.name,
             sku: formData.sku || '',
             code: formData.sku || '',
@@ -281,7 +289,7 @@ export const InventoryItemsPage: React.FC = () => {
             openingStock,
             openingQuantity: openingStock,
             openingCost,
-            branchId: selectedBranchId,
+            branchId: formBranchId,
             taxTreatment: 'BRANCH_DEFAULT',
             trackBatch: true,
             trackExpiry: true,
@@ -584,6 +592,7 @@ export const InventoryItemsPage: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveItem} className="space-y-4 pt-4">
+              {!editingItem && <BranchActionField value={formBranchId} onChange={setFormBranchId} />}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Product Name *

@@ -1,3 +1,4 @@
+import { BranchActionField } from '@/components/BranchActionField';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from '../../context/RouterContext';
@@ -108,6 +109,7 @@ export const StaffAttendancePage: React.FC = () => {
 
   // Modals state (EOD finalize & CSV import)
   const [showFinalizeModal, setShowFinalizeModal] = useState<boolean>(false);
+  const [importBranchId, setImportBranchId] = useState(isSuperAdmin ? '' : user.branchId || '');
   const [showImportModal, setShowImportModal] = useState<boolean>(false);
   const [importCsvText, setImportCsvText] = useState<string>('');
   const [importLoading, setImportLoading] = useState<boolean>(false);
@@ -456,6 +458,7 @@ export const StaffAttendancePage: React.FC = () => {
 
   // Handler: Biometric CSV Import
   const handleImportCSV = async () => {
+    if (!importBranchId || !allBranches.some((b) => b.id === importBranchId)) { toast.error('Please select a branch for this import.'); return; }
     if (!importCsvText.trim()) return;
     try {
       setImportLoading(true);
@@ -480,7 +483,7 @@ export const StaffAttendancePage: React.FC = () => {
         return;
       }
 
-      const res = await salonService.importAttendanceCSV(effectiveBranchId, rowsToImport, user);
+      const res = await salonService.importAttendanceCSV(importBranchId, rowsToImport, user);
       toast.success(`Import complete! Accepted: ${res.acceptedRows}, Rejected: ${res.rejectedRows}`);
       setShowImportModal(false);
       setImportCsvText('');
@@ -517,7 +520,7 @@ export const StaffAttendancePage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setShowImportModal(true)}
+              onClick={() => { setImportBranchId(isSuperAdmin ? '' : user.branchId || ''); setShowImportModal(true); }}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-medium shadow-xs transition-colors cursor-pointer"
             >
               <Upload className="w-3.5 h-3.5 text-slate-500" />
@@ -974,6 +977,7 @@ export const StaffAttendancePage: React.FC = () => {
             <p className="text-xs text-slate-500 mb-3">
               Paste CSV rows below. Format: <code>employeeCode,date,checkIn,checkOut</code>
             </p>
+            <BranchActionField value={importBranchId} onChange={setImportBranchId} disabled={importLoading} />
             <textarea
               rows={6}
               value={importCsvText}

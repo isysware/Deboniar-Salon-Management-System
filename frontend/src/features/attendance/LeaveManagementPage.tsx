@@ -1,3 +1,5 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useBranchAction } from '@/hooks/useBranchAction';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -6,6 +8,11 @@ import { LeaveRecord, StaffMember, BranchHoliday } from '../../types/salon';
 import { evaluateLeaveAllowance } from '../../lib/attendanceCalculations';
 import { toast } from '../../context/ToastContext';
 import { AccessDeniedView } from '../scaffold/AccessDeniedView';
+
+const loadLeaveAction = async (branchId: string) => {
+  const [staff, leaves, holidays] = await Promise.all([salonService.getStaff(branchId), salonService.getLeaves(branchId), salonService.getBranchHolidays(branchId)]);
+  return { staff, leaves, holidays };
+};
 
 export const LeaveManagementPage: React.FC = () => {
   const { user } = useAuth();
@@ -28,6 +35,7 @@ const LeaveManagementContent: React.FC = () => {
   const [designationFilter, setDesignationFilter] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const actionScope = useBranchAction(showLeaveModal, loadLeaveAction);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const effectiveBranchId = user?.role === 'SUPER_ADMIN' ? selectedBranchId : (user?.branchId || activeBranchId);
@@ -94,8 +102,9 @@ const LeaveManagementContent: React.FC = () => {
   // Handle Mark Leave
   const handleLeaveSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!actionScope.validate()) return;
     if (saving) return;
-    const selectedStaff = staffList.find((s) => s.id === leaveForm.staffId);
+    const selectedStaff = actionScope.data?.staff.find((s) => s.id === leaveForm.staffId);
     if (!selectedStaff) {
       toast.error('Please select an employee.');
       return;
@@ -126,10 +135,10 @@ const LeaveManagementContent: React.FC = () => {
 
   const leaveStaffPreview = useMemo(() => {
     if (!leaveForm.staffId) return null;
-    const staff = staffList.find((s) => s.id === leaveForm.staffId);
+    const staff = actionScope.data?.staff.find((s) => s.id === leaveForm.staffId);
     if (!staff) return null;
-    return evaluateLeaveAllowance(staff, leavesList, leaveForm.startDate, holidaysList);
-  }, [leaveForm.staffId, leaveForm.startDate, staffList, leavesList, holidaysList]);
+    return evaluateLeaveAllowance(staff, actionScope.data?.leaves || [], leaveForm.startDate, actionScope.data?.holidays || []);
+  }, [leaveForm.staffId, leaveForm.startDate, actionScope.data]);
 
 
   return <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -413,6 +422,9 @@ const LeaveManagementContent: React.FC = () => {
             </div>
 
             <form onSubmit={handleLeaveSubmit} className="p-5 space-y-4">
+              <BranchActionField value={actionScope.branchId} onChange={(id) => { actionScope.setBranchId(id); setLeaveForm((prev) => ({ ...prev, staffId: '' })); }} />
+              {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+              <fieldset disabled={!actionScope.ready} className="space-y-4 disabled:opacity-50">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Select Employee *</label>
                 <select
@@ -422,7 +434,7 @@ const LeaveManagementContent: React.FC = () => {
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
                 >
                   <option value="">-- Choose Staff Member --</option>
-                  {staffList.map((s) => (
+                  {(actionScope.data?.staff || []).map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} ({s.employeeCode})
                     </option>
@@ -554,7 +566,9 @@ const LeaveManagementContent: React.FC = () => {
                   {saving ? 'Saving...' : 'Confirm Leave'}
                 </button>
               </div>
-            </form>
+            
+              </fieldset>
+</form>
           </div>
         </div>
       )}

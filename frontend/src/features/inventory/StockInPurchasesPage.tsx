@@ -1,3 +1,5 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useInventoryActionScope } from './useInventoryActionScope';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from '@/context/RouterContext';
@@ -152,15 +154,21 @@ export const StockInPurchasesPage: React.FC = () => {
     loadData(selectedBranchId);
   }, [loadData, selectedBranchId]);
 
+  const actionScope = useInventoryActionScope(isStockInModalOpen);
+  const changeActionBranch = (id: string) => {
+    actionScope.setBranchId(id);
+    setSelectedSupplierId(''); setPaymentAccountId(''); setPaidAmount(0); setStockInLines([{ itemId: '', quantity: 1, unitPurchaseCost: 0, batchNumber: '' }]);
+  };
+
   // Open Stock In Modal
   const handleOpenStockIn = () => {
-    const firstItem = items[0];
-    setSelectedSupplierId(suppliers[0]?.id || '');
+    const firstItem = actionScope.items[0];
+    setSelectedSupplierId(actionScope.suppliers[0]?.id || '');
     setInvoiceNumber('');
     setPurchaseDate(new Date().toISOString().split('T')[0]);
     setPaidAmount(0);
     setPaymentSourceMethod('CASH');
-    setPaymentAccountId(paymentAccounts[0]?.id || '');
+    setPaymentAccountId(actionScope.accounts[0]?.id || '');
     setPurchaseNotes('');
     setStockInLines([
       {
@@ -174,7 +182,7 @@ export const StockInPurchasesPage: React.FC = () => {
   };
 
   const handleAddLine = () => {
-    const firstItem = items[0];
+    const firstItem = actionScope.items[0];
     setStockInLines((prev) => [
       ...prev,
       {
@@ -196,7 +204,7 @@ export const StockInPurchasesPage: React.FC = () => {
         if (i !== idx) return l;
         const updated = { ...l, ...updates };
         if (updates.itemId) {
-          const matched = items.find((it) => it.id === updates.itemId);
+          const matched = actionScope.items.find((it) => it.id === updates.itemId);
           if (matched && updates.unitPurchaseCost === undefined) {
             updated.unitPurchaseCost = matched.defaultPurchaseCost || 0;
           }
@@ -228,6 +236,7 @@ export const StockInPurchasesPage: React.FC = () => {
   // Submit Stock In
   const handleSubmitStockIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!actionScope.validate()) return;
     if (!selectedSupplierId) {
       const msg = 'Please select or add a supplier/vendor.';
       setErrorMessage(msg);
@@ -238,6 +247,10 @@ export const StockInPurchasesPage: React.FC = () => {
       const msg = 'Please add at least one product line.';
       setErrorMessage(msg);
       toast.error(msg);
+      return;
+    }
+    if (stockInLines.some((line) => !actionScope.items.some((item) => item.id === line.itemId))) {
+      toast.error('Select a product from this branch for every stock-in line.');
       return;
     }
 
@@ -261,14 +274,14 @@ export const StockInPurchasesPage: React.FC = () => {
     setErrorMessage(null);
     try {
       const input: CreatePurchaseInput = {
-        branchId: selectedBranchId,
+        branchId: actionScope.branchId,
         supplierId: selectedSupplierId,
         invoiceNumber: invoiceNumber.trim() || '',
         purchaseDate,
         paymentMethod: finalPaymentMethod,
         paidAmount: paidAmount > 0 ? paidAmount : 0,
         paymentAccountId: paidAmount > 0 && paymentSourceMethod === 'ONLINE' ? paymentAccountId : undefined,
-        payerDrawerId: paidAmount > 0 && paymentSourceMethod === 'CASH' ? activeDrawer?.id : undefined,
+        payerDrawerId: paidAmount > 0 && paymentSourceMethod === 'CASH' ? actionScope.activeDrawer?.id : undefined,
         notes: purchaseNotes,
         lines: stockInLines.map((l) => ({
           itemId: l.itemId,
@@ -297,6 +310,7 @@ export const StockInPurchasesPage: React.FC = () => {
   // Quick Vendor Creation
   const handleQuickAddVendor = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!actionScope.validate()) return;
     if (!quickVendorName.trim()) {
       toast.error('Vendor name is required.');
       return;
@@ -304,7 +318,7 @@ export const StockInPurchasesPage: React.FC = () => {
     try {
       const created = await salonService.createSupplier(
         {
-          branchId: selectedBranchId,
+          branchId: actionScope.branchId,
           name: quickVendorName.trim(),
           companyName: quickVendorCompany.trim() || quickVendorName.trim(),
           phone: quickVendorPhone.trim() || '—',
@@ -313,7 +327,7 @@ export const StockInPurchasesPage: React.FC = () => {
         },
         user
       );
-      setSuppliers((prev) => [created, ...prev]);
+      actionScope.refresh();
       setSelectedSupplierId(created.id);
       setIsQuickVendorModalOpen(false);
       setQuickVendorName('');
@@ -332,11 +346,12 @@ export const StockInPurchasesPage: React.FC = () => {
   // Quick Product Creation
   const handleQuickAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!actionScope.validate()) return;
     if (!quickProductName.trim()) return;
     try {
       const created = await salonService.createInventoryItem(
         {
-          branchAvailability: [selectedBranchId],
+          branchAvailability: [actionScope.branchId],
           name: quickProductName.trim(),
           sku: '',
           code: '',
@@ -356,7 +371,7 @@ export const StockInPurchasesPage: React.FC = () => {
         },
         user
       );
-      setItems((prev) => [created, ...prev]);
+      actionScope.refresh();
       if (stockInLines.length > 0) {
         handleUpdateLine(stockInLines.length - 1, { itemId: created.id, unitPurchaseCost: created.defaultPurchaseCost });
       }
@@ -611,6 +626,10 @@ export const StockInPurchasesPage: React.FC = () => {
             </div>
 
             <form id="stock-in-form" onSubmit={handleSubmitStockIn} className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              <BranchActionField value={actionScope.branchId} onChange={changeActionBranch} disabled={isSubmittingStockIn} />
+              {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+              {actionScope.loading && <p role="status" className="text-xs text-slate-500">Loading branch data...</p>}
+              <fieldset disabled={!actionScope.ready} className="space-y-4 disabled:opacity-50">
               {/* Row 1: Supplier Picker with Quick Add Button */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
                 <div>
@@ -634,7 +653,7 @@ export const StockInPurchasesPage: React.FC = () => {
                     className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-hidden"
                   >
                     <option value="">Select a Supplier</option>
-                    {suppliers.map((s) => (
+                    {actionScope.suppliers.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name} ({s.companyName || 'Vendor'}) — Khata: PKR {formatPKR(s.currentPayable ?? s.currentBalance ?? 0)}
                       </option>
@@ -683,8 +702,8 @@ export const StockInPurchasesPage: React.FC = () => {
                 </div>
 
                 {stockInLines.map((line, idx) => {
-                  const item = items.find((it) => it.id === line.itemId);
-                  const currentStockOnHand = item ? (stockMap[item.id] ?? 0) : 0;
+                  const item = actionScope.items.find((it) => it.id === line.itemId);
+                  const currentStockOnHand = item ? (actionScope.stockMap[item.id] ?? 0) : 0;
                   const newQuantity = Number(line.quantity) || 0;
                   const totalAfterStockIn = currentStockOnHand + newQuantity;
                   const lineTotalCost = newQuantity * (Number(line.unitPurchaseCost) || 0);
@@ -701,11 +720,13 @@ export const StockInPurchasesPage: React.FC = () => {
                             Product #{idx + 1}
                           </label>
                           <select
+                            required
                             value={line.itemId}
                             onChange={(e) => handleUpdateLine(idx, { itemId: e.target.value })}
                             className="w-full text-xs px-2.5 py-2 border border-slate-300 rounded-lg bg-white focus:outline-hidden"
                           >
-                            {items.map((it) => (
+                            <option value="">Select a product</option>
+                            {actionScope.items.map((it) => (
                               <option key={it.id} value={it.id}>
                                 {it.name} ({it.sku})
                               </option>
@@ -929,7 +950,8 @@ export const StockInPurchasesPage: React.FC = () => {
                           onChange={(e) => setPaymentAccountId(e.target.value)}
                           className="w-full text-xs px-3 py-2 border border-slate-300 rounded-lg bg-white focus:outline-hidden"
                         >
-                          {paymentAccounts.map((a) => (
+                          <option value="">Select a bank / online account</option>
+                          {actionScope.accounts.map((a) => (
                             <option key={a.id} value={a.id}>
                               {a.name} ({a.bankName || 'Bank'})
                             </option>
@@ -944,7 +966,7 @@ export const StockInPurchasesPage: React.FC = () => {
                           Cash Custody
                         </label>
                         <div className="text-xs py-2 px-3 bg-white border border-slate-300 rounded-lg text-slate-700 font-medium">
-                          {activeDrawer ? `Drawer: ${activeDrawer.drawerName}` : 'Branch Vault / Active Cash Drawer'}
+                          {actionScope.activeDrawer ? `Drawer: ${actionScope.activeDrawer.drawerName}` : 'Branch Vault / Active Cash Drawer'}
                         </div>
                       </div>
                     )}
@@ -953,11 +975,13 @@ export const StockInPurchasesPage: React.FC = () => {
 
                 <p className="text-[11px] text-slate-500 pt-1">
                   {remainingDue > 0
-                    ? `PKR ${formatPKR(remainingDue)} will be posted to ${suppliers.find((s) => s.id === selectedSupplierId)?.name || 'vendor'}'s payable khata.`
+                    ? `PKR ${formatPKR(remainingDue)} will be posted to ${actionScope.suppliers.find((s) => s.id === selectedSupplierId)?.name || 'vendor'}'s payable khata.`
                     : 'Bill is fully settled. No debt added to vendor khata.'}
                 </p>
               </div>
-            </form>
+            
+              </fieldset>
+</form>
 
             {/* Modal Sticky Footer */}
             <div className="px-6 py-3.5 border-t border-slate-100 flex items-center justify-between shrink-0 bg-slate-50">
@@ -975,7 +999,7 @@ export const StockInPurchasesPage: React.FC = () => {
                 <button
                   type="submit"
                   form="stock-in-form"
-                  disabled={isSubmittingStockIn}
+                  disabled={isSubmittingStockIn || !actionScope.ready}
                   className="px-6 py-2 text-xs font-semibold text-white bg-[#0047AB] hover:bg-[#003785] disabled:opacity-50 rounded-lg shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors"
                 >
                   {isSubmittingStockIn ? (
@@ -1005,6 +1029,10 @@ export const StockInPurchasesPage: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleQuickAddVendor} className="space-y-3.5 pt-3">
+              <BranchActionField value={actionScope.branchId} onChange={changeActionBranch} disabled={true} />
+              {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+              {actionScope.loading && <p role="status" className="text-xs text-slate-500">Loading branch data...</p>}
+              <fieldset disabled={!actionScope.ready} className="space-y-4 disabled:opacity-50">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Vendor Name *
@@ -1057,7 +1085,9 @@ export const StockInPurchasesPage: React.FC = () => {
                   Register Vendor
                 </button>
               </div>
-            </form>
+            
+              </fieldset>
+</form>
           </div>
         </div>
       )}
@@ -1076,6 +1106,10 @@ export const StockInPurchasesPage: React.FC = () => {
               </button>
             </div>
             <form onSubmit={handleQuickAddProduct} className="space-y-3.5 pt-3">
+              <BranchActionField value={actionScope.branchId} onChange={changeActionBranch} disabled={true} />
+              {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+              {actionScope.loading && <p role="status" className="text-xs text-slate-500">Loading branch data...</p>}
+              <fieldset disabled={!actionScope.ready} className="space-y-4 disabled:opacity-50">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Product Name *
@@ -1142,7 +1176,9 @@ export const StockInPurchasesPage: React.FC = () => {
                   Save Product
                 </button>
               </div>
-            </form>
+            
+              </fieldset>
+</form>
           </div>
         </div>
       )}

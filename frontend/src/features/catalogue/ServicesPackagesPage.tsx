@@ -1,3 +1,5 @@
+import { BranchActionField } from '@/components/BranchActionField';
+import { useBranchAction } from '@/hooks/useBranchAction';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { salonService } from '@/services';
@@ -82,6 +84,11 @@ import {
   Download,
 } from 'lucide-react';
 import { BulkUploadCatalogueModal } from './components/BulkUploadCatalogueModal';
+
+const loadActionCatalogue = async (branchId: string) => {
+  const [services, categories] = await Promise.all([salonService.getServices(branchId), salonService.getServiceCategories(branchId)]);
+  return { services, categories };
+};
 
 export const ServicesPackagesPage: React.FC = () => {
   const { user, activeBranchId, allBranches } = useAuth();
@@ -196,6 +203,18 @@ export const ServicesPackagesPage: React.FC = () => {
     components: [],
   });
 
+  const actionScope = useBranchAction(isAddServiceModalOpen || isAddPackageModalOpen || isCategoryModalOpen, loadActionCatalogue);
+  const formServices = isAddPackageModalOpen ? actionScope.data?.services || [] : services;
+  const formCategories = isAddServiceModalOpen || isCategoryModalOpen ? actionScope.data?.categories || [] : categories;
+  const formBranchId = isEditServiceModalOpen ? selectedService?.branchId || '' : isEditPackageModalOpen ? selectedPackage?.branchId || '' : actionScope.branchId;
+  const formBranch = allBranches.find((b) => b.id === formBranchId);
+  const changeActionBranch = (id: string) => {
+    actionScope.setBranchId(id);
+    setServiceFormData((prev) => ({ ...prev, category: '' }));
+    setPackageFormData((prev) => ({ ...prev, components: [] }));
+    setInlineCategoryName('');
+  };
+
   // Current branch entity
   const currentBranch = allBranches.find((b) => b.id === selectedBranchId) || allBranches[0];
   const branchTaxRate = currentBranch?.taxEnabled ? (currentBranch.taxRate ?? 0) : 0;
@@ -242,7 +261,7 @@ export const ServicesPackagesPage: React.FC = () => {
     } else if (!selectedBranchId && allBranches.length > 0) {
       setSelectedBranchId(allBranches[0].id);
     }
-  }, [activeBranchId, isSuperAdmin, selectedBranchId, allBranches]);
+  }, [activeBranchId, isSuperAdmin, allBranches]);
 
   // Filtered Services
   const filteredServices = useMemo(() => {
@@ -374,11 +393,12 @@ export const ServicesPackagesPage: React.FC = () => {
   // Handler: Add category
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCategoryName.trim()) return;
+    if (!newCategoryName.trim() || !actionScope.validate()) return;
     setCategoryError(null);
     try {
-      const created = await salonService.createServiceCategory(selectedBranchId, newCategoryName, user);
-      setCategories((prev) => [...prev, created]);
+      const created = await salonService.createServiceCategory(formBranchId, newCategoryName, user);
+      if (isEditServiceModalOpen) setCategories((prev) => [...prev, created]); else actionScope.refresh();
+      loadBranchCatalogue();
       setNewCategoryName('');
       setIsCategoryModalOpen(false);
       setSuccessMessage(`Category '${created.name}' created successfully.`);
@@ -392,12 +412,13 @@ export const ServicesPackagesPage: React.FC = () => {
 
   // Handler: Add category inline inside Service modal
   const handleCreateInlineCategory = async () => {
-    if (!inlineCategoryName.trim()) return;
+    if (!inlineCategoryName.trim() || (isAddServiceModalOpen && !actionScope.validate())) return;
     setInlineCategoryError(null);
     setIsCreatingInlineCategory(true);
     try {
-      const created = await salonService.createServiceCategory(selectedBranchId, inlineCategoryName.trim(), user);
-      setCategories((prev) => [...prev, created]);
+      const created = await salonService.createServiceCategory(formBranchId, inlineCategoryName.trim(), user);
+      if (isEditServiceModalOpen) setCategories((prev) => [...prev, created]); else actionScope.refresh();
+      loadBranchCatalogue();
       setServiceFormData((prev) => ({ ...prev, category: created.name }));
       setInlineCategoryName('');
       setIsInlineCategoryAdd(false);
@@ -414,12 +435,13 @@ export const ServicesPackagesPage: React.FC = () => {
   // Handler: Save Service
   const handleSaveService = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAddServiceModalOpen && !actionScope.validate()) return;
     setErrorMessage(null);
     try {
       if (isAddServiceModalOpen) {
         await salonService.createService(
           {
-            branchId: selectedBranchId,
+            branchId: formBranchId,
             code: serviceFormData.code,
             name: serviceFormData.name,
             category: serviceFormData.category,
@@ -484,7 +506,7 @@ export const ServicesPackagesPage: React.FC = () => {
 
   // Handler: Add Component to Package Form
   const handleAddPackageComponent = (serviceId: string) => {
-    const srv = services.find((s) => s.id === serviceId);
+    const srv = formServices.find((s) => s.id === serviceId);
     if (!srv) return;
     if (packageFormData.components.some((c) => c.serviceId === serviceId)) {
       toast.error(`Service '${srv.name}' is already added to this package.`);
@@ -527,6 +549,7 @@ export const ServicesPackagesPage: React.FC = () => {
   // Handler: Save Package
   const handleSavePackage = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAddPackageModalOpen && !actionScope.validate()) return;
     setErrorMessage(null);
     try {
       if (packageFormData.components.length === 0) {
@@ -553,7 +576,7 @@ export const ServicesPackagesPage: React.FC = () => {
       if (isAddPackageModalOpen) {
         await salonService.createPackage(
           {
-            branchId: selectedBranchId,
+            branchId: formBranchId,
             code: packageFormData.code,
             name: packageFormData.name,
             description: packageFormData.description,
@@ -1228,11 +1251,14 @@ export const ServicesPackagesPage: React.FC = () => {
               {isAddServiceModalOpen ? 'Add New Salon Service' : `Edit Service: ${selectedService?.code}`}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Configure treatment pricing and category classification for {currentBranch?.name}.
+              Configure treatment pricing and category classification for {formBranch?.name || 'the selected branch'}.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSaveService} className="space-y-3.5 text-xs">
+            {isAddServiceModalOpen && <BranchActionField value={actionScope.branchId} onChange={changeActionBranch} />}
+            {isAddServiceModalOpen && actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+            <fieldset disabled={isAddServiceModalOpen && !actionScope.ready} className="space-y-4 disabled:opacity-50">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Service Code * (Auto-generated)</label>
@@ -1315,15 +1341,15 @@ export const ServicesPackagesPage: React.FC = () => {
                   onValueChange={(val) => setServiceFormData({ ...serviceFormData, category: val })}
                 >
                   <SelectTrigger className="h-9 text-xs">
-                    <SelectValue placeholder={categories.length === 0 ? 'No categories (Add above)' : 'Select Category'} />
+                    <SelectValue placeholder={formCategories.length === 0 ? 'No categories (Add above)' : 'Select Category'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.length === 0 ? (
+                    {formCategories.length === 0 ? (
                       <div className="p-2 text-center text-xs text-slate-400">
                         No categories found
                       </div>
                     ) : (
-                      categories.map((c) => (
+                      formCategories.map((c) => (
                         <SelectItem key={c.id} value={c.name} className="text-xs">
                           {c.name}
                         </SelectItem>
@@ -1332,7 +1358,7 @@ export const ServicesPackagesPage: React.FC = () => {
                   </SelectContent>
                 </Select>
 
-                {categories.length === 0 && !isInlineCategoryAdd && (
+                {formCategories.length === 0 && !isInlineCategoryAdd && (
                   <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
                     <AlertCircle className="w-3 h-3 shrink-0" />
                     No category found. Please{' '}
@@ -1404,7 +1430,9 @@ export const ServicesPackagesPage: React.FC = () => {
                 {isAddServiceModalOpen ? 'Create Service' : 'Save Changes'}
               </Button>
             </DialogFooter>
-          </form>
+          
+            </fieldset>
+</form>
         </DialogContent>
       </Dialog>
 
@@ -1424,11 +1452,14 @@ export const ServicesPackagesPage: React.FC = () => {
               {isAddPackageModalOpen ? 'Create Bundled Service Package' : `Edit Package: ${selectedPackage?.code}`}
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Combine standalone services into an independently priced bundle for {currentBranch?.name}.
+              Combine standalone services into an independently priced bundle for {formBranch?.name || 'the selected branch'}.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSavePackage} className="space-y-4 text-xs">
+            {isAddPackageModalOpen && <BranchActionField value={actionScope.branchId} onChange={changeActionBranch} />}
+            {isAddPackageModalOpen && actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+            <fieldset disabled={isAddPackageModalOpen && !actionScope.ready} className="space-y-4 disabled:opacity-50">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="font-semibold text-slate-700 block mb-1">Package Code * (Auto-generated)</label>
@@ -1520,7 +1551,7 @@ export const ServicesPackagesPage: React.FC = () => {
                     <SelectValue placeholder="Add an active service from catalogue..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {services
+                    {formServices
                       .filter((s) => s.isActive)
                       .map((s) => (
                         <SelectItem key={s.id} value={s.id} className="text-xs">
@@ -1609,7 +1640,9 @@ export const ServicesPackagesPage: React.FC = () => {
                 {isAddPackageModalOpen ? 'Create Package' : 'Save Changes'}
               </Button>
             </DialogFooter>
-          </form>
+          
+            </fieldset>
+</form>
         </DialogContent>
       </Dialog>
 
@@ -1715,11 +1748,14 @@ export const ServicesPackagesPage: React.FC = () => {
           <DialogHeader>
             <DialogTitle className="text-base font-semibold">Branch Service Categories</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Manage custom service categories for {currentBranch?.name}.
+              Manage custom service categories for {formBranch?.name || 'the selected branch'}.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleCreateCategory} className="space-y-4 text-xs">
+            <BranchActionField value={actionScope.branchId} onChange={changeActionBranch} />
+            {actionScope.error && <p role="alert" className="text-xs text-rose-600">{actionScope.error}</p>}
+            <fieldset disabled={!actionScope.ready} className="space-y-4 disabled:opacity-50">
             {categoryError && (
               <Alert variant="destructive">
                 <AlertCircle className="w-4 h-4" />
@@ -1742,9 +1778,9 @@ export const ServicesPackagesPage: React.FC = () => {
 
             <div className="space-y-1.5 max-h-56 overflow-y-auto pt-2">
               <span className="font-semibold text-slate-700 block text-[11px] uppercase tracking-wider">
-                Active Branch Categories ({categories.length})
+                Active Branch Categories ({formCategories.length})
               </span>
-              {categories.map((c) => (
+              {formCategories.map((c) => (
                 <div
                   key={c.id}
                   className="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-200"
@@ -1760,7 +1796,9 @@ export const ServicesPackagesPage: React.FC = () => {
                 Done
               </Button>
             </DialogFooter>
-          </form>
+          
+            </fieldset>
+</form>
         </DialogContent>
       </Dialog>
 
