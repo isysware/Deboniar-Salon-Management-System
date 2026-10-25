@@ -100,7 +100,40 @@ export const getStaff = async (actor, id) => {
   return toStaffDTO(staff, { redactPay: actor.role === 'ACCOUNTANT' });
 };
 
-const generateNextEmployeeCode = async (tx) => nextSequence(tx, '', 'EMP');
+export const getBranchNumber = async (tx, branchId) => {
+  if (!branchId) return 1;
+  const branches = await tx.branch.findMany({
+    orderBy: [{ createdAt: 'asc' }, { code: 'asc' }, { id: 'asc' }],
+    select: { id: true, code: true },
+  });
+  const idx = branches.findIndex((b) => b.id === branchId);
+  return idx !== -1 ? idx + 1 : 1;
+};
+
+export const peekNextEmployeeCode = async (actor, branchId) => {
+  const targetBranch = resolveReadBranch(actor, branchId);
+  const branchNum = await getBranchNumber(prisma, targetBranch);
+  const prefix = `EMP${branchNum}`;
+  const existingStaff = await prisma.staff.findMany({
+    where: { employeeCode: { startsWith: `${prefix}-`, mode: 'insensitive' } },
+    select: { employeeCode: true },
+  });
+  let maxNum = 0;
+  const pattern = new RegExp(`^${prefix}-(\\d+)$`, 'i');
+  for (const s of existingStaff) {
+    const m = s.employeeCode?.match(pattern);
+    if (m) {
+      const val = parseInt(m[1], 10);
+      if (!isNaN(val) && val > maxNum) maxNum = val;
+    }
+  }
+  return `${prefix}-${String(maxNum + 1).padStart(4, '0')}`;
+};
+
+export const generateNextEmployeeCode = async (tx, branchId) => {
+  const branchNum = await getBranchNumber(tx, branchId);
+  return nextSequence(tx, branchId || '', `EMP${branchNum}`);
+};
 
 // ── Commands ─────────────────────────────────────────────────────────────────
 
@@ -111,7 +144,10 @@ export const createStaff = async (input, actor) => {
     const branch = await tx.branch.findUnique({ where: { id: branchId } });
     if (!branch || !branch.isActive) throw badRequest('BRANCH_INACTIVE', 'Cannot add staff to an inactive or non-existent branch.');
 
-    const employeeCode = input.employeeCode && !/^(?:EMP)-\d+$/i.test(input.employeeCode.trim()) ? input.employeeCode.trim().toUpperCase() : await generateNextEmployeeCode(tx);
+    const isAutoPlaceholder = !input.employeeCode || /^EMP\d*-\d+$/i.test(input.employeeCode.trim());
+    const employeeCode = isAutoPlaceholder
+      ? await generateNextEmployeeCode(tx, branchId)
+      : input.employeeCode.trim().toUpperCase();
 
     // Employee codes are unique across the whole company (biometric devices map by code).
     const clash = await tx.staff.findFirst({ where: { employeeCode: { equals: employeeCode, mode: 'insensitive' } } });

@@ -14,6 +14,10 @@ export const getOne = asyncHandler(async (req, res) => {
   res.json({ data: staff });
 });
 
+export const nextCode = asyncHandler(async (req, res) => {
+  res.json({ data: { code: await service.peekNextEmployeeCode(req.user, req.query.branchId) } });
+});
+
 export const create = asyncHandler(async (req, res) => {
   res.status(201).json({ data: await service.createStaff(req.body, req.user) });
 });

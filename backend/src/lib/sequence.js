@@ -22,10 +22,11 @@ const sources = {
 };
 
 export const nextSequence = async (tx, _branchCode, prefix, _year, pad = 4) => {
-  const key = ['SRV', 'SVR'].includes(prefix.toUpperCase()) ? 'SVR' : prefix.toUpperCase();
-  if (!/^[A-Z]+$/.test(key)) throw new Error('Invalid reference prefix');
+  const rawKey = prefix.toUpperCase();
+  const key = ['SRV', 'SVR'].includes(rawKey) ? 'SVR' : rawKey;
+  if (!/^[A-Z0-9]+$/.test(key)) throw new Error('Invalid reference prefix');
   const label = key === 'SVR' ? 'Svr' : key;
-  const source = sources[key];
+  const source = sources[key] || (/^EMP\d*$/i.test(key) ? sources.EMP : undefined);
   let existingMax = 0;
   if (source) {
     const [model, field] = source;

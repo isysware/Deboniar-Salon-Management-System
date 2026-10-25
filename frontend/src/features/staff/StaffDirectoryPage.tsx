@@ -318,7 +318,22 @@ export const StaffDirectoryPage: React.FC = () => {
     return true;
   });
 
-  const generateNextEmployeeCode = (_branchId?: string, currentList: StaffMember[] = (allStaffList.length > 0 ? allStaffList : staffList)) => {
+  const getBranchIndexNumber = (branchId?: string, branchList: Branch[] = branches): number => {
+    if (!branchId) return 1;
+    const idx = branchList.findIndex((b) => b.id === branchId);
+    if (idx !== -1) return idx + 1;
+    const match = branchId.match(/(\d+)$/);
+    if (match) return parseInt(match[1], 10);
+    return 1;
+  };
+
+  const generateNextEmployeeCode = (
+    targetBranchId?: string,
+    currentList: StaffMember[] = (allStaffList.length > 0 ? allStaffList : staffList),
+    branchList: Branch[] = branches
+  ) => {
+    const branchNum = getBranchIndexNumber(targetBranchId, branchList);
+    const prefix = `EMP${branchNum}`;
     let maxNum = 0;
     const existingCodes = new Set(
       currentList
@@ -326,9 +341,10 @@ export const StaffDirectoryPage: React.FC = () => {
         .filter(Boolean) as string[]
     );
 
+    const pattern = new RegExp(`^${prefix}-(\\d+)$`, 'i');
     for (const s of currentList) {
       if (!s.employeeCode) continue;
-      const m = s.employeeCode.match(/(\d+)$/);
+      const m = s.employeeCode.match(pattern);
       if (m) {
         const val = parseInt(m[1], 10);
         if (!isNaN(val) && val > maxNum) maxNum = val;
@@ -336,18 +352,17 @@ export const StaffDirectoryPage: React.FC = () => {
     }
 
     let nextNum = maxNum + 1;
-    // Preview only; the saved number is allocated by the service.
-    let candidate = `EMP-${String(nextNum).padStart(4, '0')}`;
+    let candidate = `${prefix}-${String(nextNum).padStart(4, '0')}`;
     while (existingCodes.has(candidate)) {
       nextNum++;
-      candidate = `EMP-${String(nextNum).padStart(4, '0')}`;
+      candidate = `${prefix}-${String(nextNum).padStart(4, '0')}`;
     }
     return candidate;
   };
 
   const handleOpenAdd = () => {
-    const defaultBranch = isSuperAdmin ? '' : (user.branchId as string);
-    const code = generateNextEmployeeCode(defaultBranch, allStaffList.length > 0 ? allStaffList : staffList);
+    const defaultBranch = isSuperAdmin ? (branches[0]?.id || '') : (user.branchId as string);
+    const code = generateNextEmployeeCode(defaultBranch, allStaffList.length > 0 ? allStaffList : staffList, branches);
 
     setFormData({
       employeeCode: code,

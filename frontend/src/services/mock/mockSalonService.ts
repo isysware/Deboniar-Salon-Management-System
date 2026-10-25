@@ -1081,7 +1081,11 @@ class MockSalonService implements SalonServiceContract {
       }
     }
 
-    const code = !params.employeeCode || /^EMP-\d+$/i.test(params.employeeCode) ? nextReference(store, 'EMP') : params.employeeCode.trim().toUpperCase();
+    const branchList = store.branches || [];
+    const bIdx = branchList.findIndex((b) => b.id === params.branchId);
+    const branchNum = bIdx !== -1 ? bIdx + 1 : (params.branchId?.match(/(\d+)$/)?.[1] || 1);
+    const prefix = `EMP${branchNum}`;
+    const code = !params.employeeCode || /^EMP\d*-\d+$/i.test(params.employeeCode) ? nextReference(store, prefix) : params.employeeCode.trim().toUpperCase();
     if (!code) throw new Error('Unique employee code is required.');
     if (store.staff.some((s) => s.employeeCode.toUpperCase() === code)) {
       throw new Error(`Employee code '${code}' is already assigned to another staff member.`);
