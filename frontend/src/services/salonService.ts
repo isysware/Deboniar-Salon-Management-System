@@ -252,7 +252,7 @@ export interface SalonServiceContract {
   getBranch(id: string): Promise<Branch | null>;
   createBranch(branch: Omit<Branch, 'id'>, actor: User): Promise<Branch>;
   updateBranch(id: string, branch: Partial<Branch>, actor: User): Promise<Branch>;
-  assignBranchAdmin(branchId: string, adminUserId: string, actor: User): Promise<Branch>;
+  assignBranchAdmin(branchId: string, adminUserId: string, actor: User, credentials?: { email: string; password: string }): Promise<Branch>;
   unassignBranchAdmin(branchId: string, adminUserId: string, actor: User): Promise<Branch>;
   deactivateBranch(id: string, actor: User): Promise<{ success: boolean; message: string }>;
   deleteBranch(id: string, actor: User): Promise<{ success: boolean; message: string }>;

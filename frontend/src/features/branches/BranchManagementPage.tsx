@@ -112,6 +112,13 @@ export const BranchManagementPage: React.FC = () => {
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedAdminId, setSelectedAdminId] = useState('');
+  const [branchLoginEmail, setBranchLoginEmail] = useState('');
+  const [branchLoginPassword, setBranchLoginPassword] = useState('');
+  const selectedAdmin = adminUsers.find((admin) => admin.id === selectedAdminId);
+  const needsBranchCredentials = !!selectedAdmin && (
+    (!!selectedAdmin.branchId && selectedAdmin.branchId !== selectedBranch?.id) ||
+    branches.some((branch) => branch.id !== selectedBranch?.id && branch.assignedAdminId === selectedAdmin.id)
+  );
 
   const loadData = async () => {
     setIsLoading(true);
@@ -210,6 +217,8 @@ export const BranchManagementPage: React.FC = () => {
     const current = branches.find((b) => b.id === branch.id) || branch;
     setSelectedBranch(current);
     setSelectedAdminId('');
+    setBranchLoginEmail('');
+    setBranchLoginPassword('');
     setFormError(null);
     setIsAssignAdminModalOpen(true);
   };
@@ -323,7 +332,7 @@ export const BranchManagementPage: React.FC = () => {
     setIsSubmitting(true);
     setFormError(null);
     try {
-      const updated = await salonService.assignBranchAdmin(selectedBranch.id, selectedAdminId, user);
+      const updated = await salonService.assignBranchAdmin(selectedBranch.id, selectedAdminId, user, needsBranchCredentials ? { email: branchLoginEmail, password: branchLoginPassword } : undefined);
       toast.success('Branch administrator assigned successfully.');
       const [allBranches, allUsers] = await Promise.all([
         salonService.getBranches(),
@@ -334,6 +343,8 @@ export const BranchManagementPage: React.FC = () => {
       const fresh = allBranches.find((b) => b.id === selectedBranch.id) || updated;
       setSelectedBranch(fresh);
       setSelectedAdminId('');
+      setBranchLoginEmail('');
+      setBranchLoginPassword('');
     } catch (err: any) {
       const errMsg = err.message || 'Failed to assign branch administrator.';
       setFormError(errMsg);
@@ -1063,7 +1074,7 @@ export const BranchManagementPage: React.FC = () => {
                 <label className="block text-xs font-medium text-slate-700 mb-1.5">
                   Select Administrator Account
                 </label>
-                <Select value={selectedAdminId} onValueChange={setSelectedAdminId}>
+                <Select value={selectedAdminId} onValueChange={(id) => { setSelectedAdminId(id); setBranchLoginEmail(''); setBranchLoginPassword(''); }}>
                   <SelectTrigger className="h-10 text-xs">
                     <SelectValue placeholder="Choose an administrator account..." />
                   </SelectTrigger>
@@ -1086,6 +1097,20 @@ export const BranchManagementPage: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
+
+              {needsBranchCredentials && (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-600">Create a separate login for this branch. The existing branch login and access will remain unchanged.</p>
+                  <label className="block text-xs font-medium text-slate-700">
+                    New branch login email
+                    <Input type="email" autoComplete="off" required value={branchLoginEmail} onChange={(e) => setBranchLoginEmail(e.target.value)} />
+                  </label>
+                  <label className="block text-xs font-medium text-slate-700">
+                    New branch login password
+                    <Input type="password" autoComplete="new-password" required minLength={6} maxLength={72} value={branchLoginPassword} onChange={(e) => setBranchLoginPassword(e.target.value)} />
+                  </label>
+                </div>
+              )}
 
               <Alert variant="info" className="py-2">
                 <AlertDescription className="text-xs text-slate-600">

@@ -23,7 +23,7 @@ export const update = asyncHandler(async (req, res) => {
 });
 
 export const assignAdmin = asyncHandler(async (req, res) => {
-  res.json({ data: await service.assignBranchAdmin(req.params.id, req.body.adminUserId, req.user) });
+  res.json({ data: await service.assignBranchAdmin(req.params.id, req.body.adminUserId, req.user, req.body) });
 });
 
 export const unassignAdmin = asyncHandler(async (req, res) => {

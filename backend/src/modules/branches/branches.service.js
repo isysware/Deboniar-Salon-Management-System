@@ -8,6 +8,7 @@ import { badRequest, conflict, forbidden, notFound } from '../../lib/AppError.js
 import { toDec } from '../../lib/money.js';
 import { hashPassword } from '../auth/auth.service.js';
 import { toBranchDTO } from './branches.mapper.js';
+import { assignAdminSchema } from './branches.schema.js';
 
 export const toDTOs = async (branches, tx = prisma) => {
   const branchIds = branches.map((b) => b.id);
@@ -160,7 +161,7 @@ export const updateBranch = async (id, input, actor) => {
   });
 };
 
-export const assignBranchAdmin = async (branchId, adminUserId, actor) => {
+export const assignBranchAdmin = async (branchId, adminUserId, actor, credentials = {}) => {
   return prisma.$transaction(async (tx) => {
     const branch = await getOrThrow(tx, branchId);
     const user = await tx.user.findUnique({ where: { id: adminUserId } });
@@ -168,21 +169,37 @@ export const assignBranchAdmin = async (branchId, adminUserId, actor) => {
     if (user.role !== 'ADMIN') throw badRequest('NOT_ADMIN', `User '${user.name}' does not have the ADMIN role.`);
     if (!user.isActive) throw badRequest('USER_INACTIVE', `Cannot assign inactive administrator '${user.name}' to a branch.`);
 
-    // Assign branchId to this administrator
-    await tx.user.update({
-      where: { id: user.id },
-      data: { branchId },
-    });
+    let assignedUser = user;
+    // A login belongs to one branch. Additional branches get independent accounts.
+    const otherAssignment = user.branchId && user.branchId !== branchId
+      || await tx.branch.findFirst({ where: { assignedAdminId: user.id, NOT: { id: branchId } } });
+    if (otherAssignment) {
+      const input = assignAdminSchema.safeParse({ adminUserId, email: credentials.email, password: credentials.password });
+      if (!input.success || !input.data.email || !input.data.password) {
+        throw badRequest('BRANCH_CREDENTIALS_REQUIRED', 'A valid new login email and password (6–72 characters) are required for this branch.');
+      }
+      const { email, password } = input.data;
+      if (await tx.user.findUnique({ where: { email } })) {
+        throw conflict('EMAIL_TAKEN', 'This login email is already registered. Use a new email for this branch.');
+      }
+      assignedUser = await tx.user.create({ data: {
+        name: user.name, role: 'ADMIN', branchId, email,
+        passwordHash: await hashPassword(password),
+        title: user.title, phone: user.phone, avatarUrl: user.avatarUrl,
+      } });
+    } else if (user.branchId !== branchId) {
+      await tx.user.update({ where: { id: user.id }, data: { branchId } });
+    }
 
     const updated = await tx.branch.update({
       where: { id: branchId },
-      data: { assignedAdminId: user.id },
+      data: { assignedAdminId: assignedUser.id },
     });
 
     await auditLog(tx, {
       userId: actor.id, userName: actor.name, action: 'BRANCH_ADMIN_ASSIGNED', entity: 'Branch',
       entityId: branchId, branchId, before: { assignedAdminId: branch.assignedAdminId },
-      after: { assignedAdminId: user.id, adminName: user.name },
+      after: { assignedAdminId: assignedUser.id, adminName: user.name },
     });
     return (await toDTOs([updated], tx))[0];
   });

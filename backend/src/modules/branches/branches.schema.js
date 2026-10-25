@@ -34,4 +34,6 @@ export const updateBranchSchema = z.object({
 
 export const assignAdminSchema = z.object({
   adminUserId: z.string().min(1, 'adminUserId is required'),
+  email: z.string().trim().toLowerCase().email('Invalid login email address').optional(),
+  password: z.string().min(6, 'Password must be at least 6 characters').max(72, 'Password must be at most 72 characters').optional(),
 });

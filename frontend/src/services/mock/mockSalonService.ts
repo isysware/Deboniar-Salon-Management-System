@@ -430,7 +430,7 @@ class MockSalonService implements SalonServiceContract {
     return { ...updated };
   }
 
-  async assignBranchAdmin(branchId: string, adminUserId: string, actor?: User): Promise<Branch> {
+  async assignBranchAdmin(branchId: string, adminUserId: string, actor?: User, credentials?: { email: string; password: string }): Promise<Branch> {
     const authenticatedActor = this.getAuthenticatedActor(actor);
     if (authenticatedActor.role !== 'SUPER_ADMIN') {
       throw new Error('Access Denied: Only Super Administrators can assign Branch Administrators.');
@@ -455,11 +455,23 @@ class MockSalonService implements SalonServiceContract {
       throw new Error(`Cannot assign inactive administrator '${user.name}' to a branch.`);
     }
 
-    user.branchId = branchId;
-    user.branchName = branch.name;
-
-    branch.assignedAdminId = user.id;
-    branch.assignedAdminName = user.name;
+    let assignedUser = user;
+    const otherAssignment = (user.branchId && user.branchId !== branchId) || store.branches.some((b) => b.id !== branchId && b.assignedAdminId === user.id);
+    if (otherAssignment) {
+      const email = credentials?.email.trim().toLowerCase();
+      const password = credentials?.password;
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !password || password.length < 6 || password.length > 72) {
+        throw new Error('A valid new login email and password (6?72 characters) are required for this branch.');
+      }
+      if (store.users.some((u) => u.email.toLowerCase() === email)) throw new Error('This login email is already registered.');
+      assignedUser = { ...user, id: crypto.randomUUID(), email, password, staffId: undefined, branchId, branchName: branch.name };
+      store.users.push(assignedUser);
+    } else {
+      user.branchId = branchId;
+      user.branchName = branch.name;
+    }
+    branch.assignedAdminId = assignedUser.id;
+    branch.assignedAdminName = assignedUser.name;
 
     mockStorage.saveStore(store);
     return { ...branch };
