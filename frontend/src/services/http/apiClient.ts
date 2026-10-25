@@ -111,6 +111,9 @@ export async function apiRequest<T = any>(method: string, path: string, opts: Re
     const err = json?.error;
     throw new ApiError(res.status, err?.code || 'HTTP_ERROR', err?.message || `Request failed (${res.status})`, err?.details);
   }
+  if (res.status !== 204 && json === null) {
+    throw new ApiError(res.status, 'INVALID_RESPONSE', 'Invalid JSON response from server. Please verify your API URL.');
+  }
   return (json?.data ?? json) as T;
 }
 

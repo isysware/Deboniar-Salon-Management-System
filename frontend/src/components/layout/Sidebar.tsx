@@ -46,9 +46,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { pathname, navigate } = useRouter();
   const [expandedMenus, setExpandedMenus] = React.useState<Record<string, boolean>>({});
 
+  const branchList = Array.isArray(allBranches) ? allBranches : [];
   const currentBranch =
-    allBranches.find((b) => b.id === (user?.role === 'SUPER_ADMIN' && activeBranchId !== 'ALL' ? activeBranchId : user?.branchId)) ||
-    allBranches[0];
+    branchList.find((b) => b.id === (user?.role === 'SUPER_ADMIN' && activeBranchId !== 'ALL' ? activeBranchId : user?.branchId)) ||
+    branchList[0];
 
   const brandName = currentBranch?.name || user?.branchName || 'SalonOS';
   const logoUrl = currentBranch?.logoUrl;

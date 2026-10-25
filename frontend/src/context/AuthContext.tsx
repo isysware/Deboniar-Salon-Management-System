@@ -30,15 +30,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshBranches = useCallback(async () => {
     try {
       const branches = await salonService.getBranches();
+      const branchList = Array.isArray(branches) ? branches : [];
       const current = authService.getCurrentSession();
       if (current && current.user.role !== 'SUPER_ADMIN') {
-        const myBranch = branches.filter((b) => b.id === current.user.branchId);
-        setAllBranches(myBranch.length > 0 ? myBranch : branches);
+        const myBranch = branchList.filter((b) => b.id === current.user.branchId);
+        setAllBranches(myBranch.length > 0 ? myBranch : branchList);
       } else {
-        setAllBranches(branches);
+        setAllBranches(branchList);
       }
     } catch (err) {
       console.error('Failed to load branches:', err);
+      setAllBranches([]);
     }
   }, []);
 

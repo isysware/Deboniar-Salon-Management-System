@@ -35,3 +35,7 @@ Thumbs.db
 .idea/
 coverage/
 **/coverage/
+
+# Deployment packages & archives
+deployment-builds/
+*.zip

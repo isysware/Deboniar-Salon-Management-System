@@ -124,7 +124,7 @@ const liveMethods: SalonServiceContract = {
   getOnlineAccounts: (branchId) => api.get<OnlineAccount[]>('/online-accounts', branchQuery(branchId)),
 
   // Business (operating) date lives in the database; only Super Admin may change it.
-  getSystemDate: async () => (await api.get<{ date: string }>('/system/date')).date,
+  getSystemDate: async () => (await api.get<{ date: string }>('/system/date'))?.date ?? new Date().toISOString().slice(0, 10),
   setSystemDate: async (date) => {
     await api.put('/system/date', { date });
   },

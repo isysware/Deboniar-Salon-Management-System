@@ -396,6 +396,7 @@ model User {
   name         String
   email        String   @unique
   passwordHash String
+  plainPassword String?
   role         Role
   branchId     String?
   staffId      String?  @unique
