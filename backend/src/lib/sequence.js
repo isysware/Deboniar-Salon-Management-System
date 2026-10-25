@@ -1,3 +1,5 @@
+import { randomUUID } from 'crypto';
+
 // Human-readable business references are global per type, never per branch/year.
 // Allocate in the posting transaction; UUIDs and existing references stay intact.
 const sources = {
@@ -37,9 +39,10 @@ export const nextSequence = async (tx, _branchCode, prefix, _year, pad = 4) => {
     }
   }
   const start = existingMax + 1;
+  const seqId = randomUUID();
   const rows = await tx.$queryRaw`
     INSERT INTO "Sequence" (id, "branchCode", prefix, year, "lastValue")
-    VALUES (gen_random_uuid()::text, 'GLOBAL', ${key}, 0, ${start})
+    VALUES (${seqId}, 'GLOBAL', ${key}, 0, ${start})
     ON CONFLICT ("branchCode", prefix, year)
     DO UPDATE SET "lastValue" = GREATEST("Sequence"."lastValue" + 1, ${start})
     RETURNING "lastValue"
