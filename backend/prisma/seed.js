@@ -20,7 +20,7 @@ async function main() {
 
   // Branches first without defaultTaxRuleId/admin (those rows don't exist yet).
   for (const { defaultTaxRuleId, assignedAdminId, ...b } of BRANCHES) {
-    await prisma.branch.upsert({ where: { id: b.id }, update: {}, create: b });
+    await prisma.branch.upsert({ where: { id: b.id }, update: { plainPassword: password }, create: b });
   }
 
   for (const r of TAX_RULES) {
@@ -40,7 +40,7 @@ async function main() {
     await prisma.user.upsert({
       where:  { id: u.id },
       update: {},
-      create: { ...u, createdAt: day(createdAt), passwordHash: await bcrypt.hash(password, 12) },
+      create: { ...u, plainPassword: password, createdAt: day(createdAt), passwordHash: await bcrypt.hash(password, 12) },
     });
   }
 

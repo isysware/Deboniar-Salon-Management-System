@@ -27,3 +27,7 @@ export const updateUserSchema = z.object({
   role:     role.optional(),
   branchId: z.string().nullable().optional(),
 }).passthrough();
+
+export const resetPasswordSchema = z.object({
+  password: z.string().trim().min(6, 'Password must be at least 6 characters').optional(),
+});

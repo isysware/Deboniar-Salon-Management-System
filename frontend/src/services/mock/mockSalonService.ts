@@ -896,7 +896,7 @@ class MockSalonService implements SalonServiceContract {
     return { success: true, message: `User account '${targetUser.name}' (${targetUser.email}) permanently deleted.` };
   }
 
-  async resetUserPassword(id: string, actor?: User): Promise<{ success: boolean; temporaryPassword: string; message: string }> {
+  async resetUserPassword(id: string, actor?: User, newPassword?: string): Promise<{ success: boolean; temporaryPassword?: string; password?: string; message: string }> {
     const authenticatedActor = this.getAuthenticatedActor(actor);
     if (authenticatedActor.role !== 'SUPER_ADMIN' && authenticatedActor.role !== 'ADMIN') {
       throw new Error('Access Denied: Only Administrators can reset account passwords.');
@@ -917,15 +917,16 @@ class MockSalonService implements SalonServiceContract {
       }
     }
 
-    // Generate secure simulated temp password
-    const temporaryPassword = `Temp@${Math.floor(1000 + Math.random() * 9000)}`;
-    targetUser.password = temporaryPassword;
+    // Use custom password if provided, else generate secure temp password
+    const finalPassword = newPassword && newPassword.trim() ? newPassword.trim() : `Temp@${Math.floor(1000 + Math.random() * 9000)}`;
+    targetUser.password = finalPassword;
     mockStorage.saveStore(store);
 
     return {
       success: true,
-      temporaryPassword,
-      message: `Simulated Reset: Credentials for ${targetUser.name} have been updated. (Note: In this demo environment, no external email was dispatched; the temporary password is shown directly).`,
+      temporaryPassword: finalPassword,
+      password: finalPassword,
+      message: `Credentials for ${targetUser.name} have been updated successfully.`,
     };
   }
 

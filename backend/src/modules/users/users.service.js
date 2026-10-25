@@ -35,7 +35,7 @@ export const listUsers = async (actor, branchId) => {
     ? { branchId: actor.branchId }
     : branchId && branchId !== 'ALL' ? { branchId } : {};
   const users = await prisma.user.findMany({ where, include, orderBy: { createdAt: 'asc' } });
-  return users.map(toUserDTO);
+  return users.map((u) => toUserDTO(u, actor.role));
 };
 
 export const getUser = async (actor, id) => {
@@ -44,7 +44,7 @@ export const getUser = async (actor, id) => {
   if (actor.role === 'ADMIN' && user.branchId !== actor.branchId) {
     throw forbidden('BRANCH_FORBIDDEN', 'Access Denied: Cannot view user from another branch.');
   }
-  return toUserDTO(user);
+  return toUserDTO(user, actor.role);
 };
 
 export const createUser = async (params, actor) => {
@@ -84,14 +84,17 @@ export const createUser = async (params, actor) => {
           throw conflict('EMAIL_TAKEN', `Login identifier '${input.email}' is already registered to another account.`);
         }
         const data = { isActive: true, email: input.email, name: input.name };
-        if (input.password) data.passwordHash = await hashPassword(input.password);
+        if (input.password) {
+          data.passwordHash = await hashPassword(input.password);
+          data.plainPassword = input.password.trim();
+        }
         const user = await tx.user.update({ where: { id: staff.user.id }, data, include });
         await tx.staff.update({ where: { id: staff.id }, data: { hasPortalAccess: true } });
         await auditLog(tx, {
           userId: actor.id, userName: actor.name, action: 'USER_REACTIVATED', entity: 'User',
           entityId: user.id, branchId: user.branchId, after: strip(user),
         });
-        return toUserDTO(user);
+        return toUserDTO(user, actor.role);
       }
     } else {
       input.staffId = undefined;
@@ -111,6 +114,7 @@ export const createUser = async (params, actor) => {
         title:        input.title,
         phone:        input.phone || null,
         passwordHash: await hashPassword(input.password || DEFAULT_PASSWORD),
+        plainPassword: (input.password || DEFAULT_PASSWORD).trim(),
       },
       include,
     });
@@ -130,7 +134,7 @@ export const createUser = async (params, actor) => {
       userId: actor.id, userName: actor.name, action: 'USER_CREATED', entity: 'User',
       entityId: user.id, branchId: user.branchId, after: strip(user),
     });
-    return toUserDTO(user);
+    return toUserDTO(user, actor.role);
   });
 };
 
@@ -148,6 +152,10 @@ export const updateUser = async (id, params, actor) => {
     if (params.name) data.name = params.name;
     if (params.phone !== undefined) data.phone = params.phone || null;
     if (params.title) data.title = params.title;
+    if (params.password) {
+      data.passwordHash = await hashPassword(params.password.trim());
+      data.plainPassword = params.password.trim();
+    }
     if (params.isActive !== undefined) {
       data.isActive = Boolean(params.isActive);
       if (data.isActive && target.staffId) {
@@ -211,7 +219,7 @@ export const updateUser = async (id, params, actor) => {
       userId: actor.id, userName: actor.name, action: auditAction, entity: 'User',
       entityId: id, branchId: user.branchId, before: strip(target), after: strip(user),
     });
-    return toUserDTO(user);
+    return toUserDTO(user, actor.role);
   });
 };
 
@@ -259,7 +267,7 @@ export const reactivateUser = async (id, actor) => {
       userId: actor.id, userName: actor.name, action: 'USER_REACTIVATED', entity: 'User',
       entityId: id, branchId: user.branchId, before: strip(target), after: strip(user),
     });
-    return { success: true, user: toUserDTO(user), message: `User account '${target.name}' (${target.email}) reactivated.` };
+    return { success: true, user: toUserDTO(user, actor.role), message: `User account '${target.name}' (${target.email}) reactivated.` };
   });
 };
 
@@ -302,7 +310,7 @@ export const deleteUser = async (id, actor) => {
   });
 };
 
-export const resetUserPassword = async (id, actor) => {
+export const resetUserPassword = async (id, password, actor) => {
   return prisma.$transaction(async (tx) => {
     const target = await getOrThrow(tx, id);
     if (actor.role === 'ADMIN') {
@@ -314,8 +322,14 @@ export const resetUserPassword = async (id, actor) => {
       }
     }
 
-    const temporaryPassword = `Temp@${crypto.randomInt(1000, 10000)}`;
-    await tx.user.update({ where: { id }, data: { passwordHash: await hashPassword(temporaryPassword) } });
+    const finalPassword = password && password.trim() ? password.trim() : `Temp@${crypto.randomInt(1000, 10000)}`;
+    await tx.user.update({
+      where: { id },
+      data: {
+        passwordHash: await hashPassword(finalPassword),
+        plainPassword: finalPassword,
+      },
+    });
     await tx.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
     await auditLog(tx, {
       userId: actor.id, userName: actor.name, action: 'USER_PASSWORD_RESET', entity: 'User', entityId: id, branchId: target.branchId,
@@ -323,8 +337,9 @@ export const resetUserPassword = async (id, actor) => {
 
     return {
       success: true,
-      temporaryPassword,
-      message: `Credentials for ${target.name} have been reset. Share the temporary password securely; the user should change it after logging in.`,
+      temporaryPassword: finalPassword,
+      password: finalPassword,
+      message: `Password for ${target.name} has been updated successfully.`,
     };
   });
 };

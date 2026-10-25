@@ -107,7 +107,7 @@ const liveMethods: SalonServiceContract = {
   deactivateUser: (id) => api.post(`/users/${id}/deactivate`),
   reactivateUser: (id) => api.post(`/users/${id}/reactivate`),
   deleteUser: (id) => api.delete(`/users/${id}`),
-  resetUserPassword: (id) => api.post(`/users/${id}/reset-password`),
+  resetUserPassword: (id, _actor, password) => api.post(`/users/${id}/reset-password`, password ? { password } : {}),
 
   // ── Step 4 · Branch settings (tax rules, payment accounts) ─────────────────
   getTaxRules: (branchId) => api.get<TaxRule[]>('/tax-rules/options', branchQuery(branchId)),

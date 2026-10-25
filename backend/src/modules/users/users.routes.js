@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
 import { validate } from '../../middleware/validate.js';
-import { createUserSchema, updateUserSchema, listUsersQuery } from './users.schema.js';
+import { createUserSchema, updateUserSchema, listUsersQuery, resetPasswordSchema } from './users.schema.js';
 import * as c from './users.controller.js';
 
 const router = Router();
@@ -17,6 +17,6 @@ router.put('/:id',                  validate(updateUserSchema), c.update);
 router.post('/:id/deactivate',      c.deactivate);
 router.post('/:id/reactivate',        c.reactivate);
 router.delete('/:id',                 c.remove);
-router.post('/:id/reset-password',  c.resetPassword);
+router.post('/:id/reset-password',  validate(resetPasswordSchema), c.resetPassword);
 
 export default router;

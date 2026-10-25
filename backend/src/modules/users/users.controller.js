@@ -35,5 +35,5 @@ export const remove = asyncHandler(async (req, res) => {
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
-  res.json({ data: await service.resetUserPassword(req.params.id, req.user) });
+  res.json({ data: await service.resetUserPassword(req.params.id, req.body?.password, req.user) });
 });

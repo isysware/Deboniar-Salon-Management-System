@@ -277,7 +277,7 @@ export interface SalonServiceContract {
   deactivateUser(id: string, actor: User): Promise<{ success: boolean; message: string }>;
   reactivateUser(id: string, actor: User): Promise<{ success: boolean; message: string }>;
   deleteUser(id: string, actor: User): Promise<{ success: boolean; message: string }>;
-  resetUserPassword(id: string, actor: User): Promise<{ success: boolean; temporaryPassword: string; message: string }>;
+  resetUserPassword(id: string, actor: User, newPassword?: string): Promise<{ success: boolean; temporaryPassword?: string; password?: string; message: string }>;
 
   getStaffMembers(actor: User, branchId?: string): Promise<StaffMember[]>;
   getStaffMember(id: string): Promise<StaffMember | null>;
