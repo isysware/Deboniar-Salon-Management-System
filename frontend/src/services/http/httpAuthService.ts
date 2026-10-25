@@ -2,7 +2,7 @@
 
 import { AuthServiceContract, LoginParams, PasswordResetResponse } from '../authService';
 import { Session, PortalType } from '@/types/auth';
-import { api, refreshSession, setAccessToken, setSessionExpiredHandler } from './apiClient';
+import { api, getAccessToken, refreshSession, setAccessToken, setSessionExpiredHandler } from './apiClient';
 
 const ACTIVE_BRANCH_KEY = 'salonos_active_branch';
 const REMEMBER_ME_KEY = 'isysware_salon_remembered_id';
@@ -34,8 +34,7 @@ class HttpAuthService implements AuthServiceContract {
   private restoring: Promise<Session | null> | null = null;
 
   /**
-   * Restores the session on page load using the refresh cookie. Concurrent callers (e.g. React
-   * StrictMode running effects twice) share one request, because each refresh rotates the token.
+   * Restores the session on page load using the refresh cookie or valid stored access token.
    */
   restoreSession(): Promise<Session | null> {
     if (!this.restoring) {
@@ -48,14 +47,35 @@ class HttpAuthService implements AuthServiceContract {
 
   private async doRestore(): Promise<Session | null> {
     const data = await refreshSession().catch(() => null);
-    if (!data) {
-      this.setCurrentSession(null);
-      return null;
+    if (data) {
+      const session: Session = data;
+      if (session.user.role === 'SUPER_ADMIN') session.activeBranchId = readActiveBranch() || 'ALL';
+      this.setCurrentSession(session);
+      return session;
     }
-    const session: Session = data;
-    if (session.user.role === 'SUPER_ADMIN') session.activeBranchId = readActiveBranch() || 'ALL';
-    this.setCurrentSession(session);
-    return session;
+
+    // Fallback: If refresh cookie wasn't sent (e.g. non-HTTPS cPanel setup), verify stored access token
+    const token = getAccessToken();
+    if (token) {
+      try {
+        const user = await api.get<any>('/auth/me');
+        if (user) {
+          const session: Session = {
+            user,
+            token,
+            loginTime: new Date().toISOString(),
+            activeBranchId: user.role === 'SUPER_ADMIN' ? (readActiveBranch() || 'ALL') : user.branchId,
+          };
+          this.setCurrentSession(session);
+          return session;
+        }
+      } catch {
+        /* token is invalid or expired */
+      }
+    }
+
+    this.setCurrentSession(null);
+    return null;
   }
 
   async login({ portal, identifier, password, rememberMe }: LoginParams): Promise<Session> {

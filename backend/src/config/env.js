@@ -20,8 +20,8 @@ export const env = {
 
   jwtAccessSecret:   process.env.JWT_ACCESS_SECRET || 'salonos_access_default_secret_2026',
   jwtRefreshSecret:  process.env.JWT_REFRESH_SECRET || 'salonos_refresh_default_secret_2026',
-  jwtAccessExpires:  process.env.JWT_ACCESS_EXPIRES  || '15m',
-  jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES || '7d',
+  jwtAccessExpires:  process.env.JWT_ACCESS_EXPIRES  || '7d',
+  jwtRefreshExpires: process.env.JWT_REFRESH_EXPIRES || '30d',
 
   corsOrigin:        process.env.CORS_ORIGIN || 'http://localhost:3000',
   tz:                process.env.TZ           || 'Asia/Karachi',

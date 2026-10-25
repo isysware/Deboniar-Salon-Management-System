@@ -31,12 +31,26 @@ interface RequestOptions {
   skipRefresh?: boolean;
 }
 
-let accessToken: string | null = null;
+const TOKEN_STORAGE_KEY = 'salonos_access_token';
+
+let accessToken: string | null = (() => {
+  try {
+    return sessionStorage.getItem(TOKEN_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+})();
 let refreshInFlight: Promise<boolean> | null = null;
 let onSessionExpired: (() => void) | null = null;
 
 export const setAccessToken = (token: string | null) => {
   accessToken = token;
+  try {
+    if (token) sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+  } catch {
+    /* storage unavailable */
+  }
 };
 
 export const getAccessToken = () => accessToken;
