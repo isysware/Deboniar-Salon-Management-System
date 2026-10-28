@@ -103,7 +103,7 @@ const operatingProfitQuery = z.object({
 });
 reportRoutes.get(
   '/operating-profit',
-  authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'),
+  authorize('SUPER_ADMIN', 'ADMIN'),
   validate(operatingProfitQuery, 'query'),
   send((req) => r.operatingProfitReport(req.user, req.query))
 );
@@ -184,7 +184,7 @@ const inventoryReportQuery = z.object({
 });
 reportRoutes.get(
   '/inventory',
-  authorize('SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'),
+  authorize('SUPER_ADMIN', 'ADMIN'),
   validate(inventoryReportQuery, 'query'),
   send((req) => r.inventoryReport(req.user, req.query))
 );

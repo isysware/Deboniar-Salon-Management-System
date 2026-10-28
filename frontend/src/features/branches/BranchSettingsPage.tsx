@@ -108,8 +108,7 @@ export const BranchSettingsPage: React.FC = () => {
     ? ''
     : (user.branchId as string);
 
-  const getTabFromPath = (path: string): 'SALON_PROFILE' | 'PAYMENT_ACCOUNTS' | 'TAX_SETTINGS' | 'DATA_RESET' | 'DEVICE_INTEGRATION' => {
-    if (path === '/admin/data-reset' || path === '/admin/reset-data') return 'DATA_RESET';
+  const getTabFromPath = (path: string): 'SALON_PROFILE' | 'PAYMENT_ACCOUNTS' | 'TAX_SETTINGS' | 'DEVICE_INTEGRATION' => {
     if (path === '/admin/devices' || path === '/admin/device-settings') return 'DEVICE_INTEGRATION';
     if (path === '/admin/payment-accounts') return 'PAYMENT_ACCOUNTS';
     if (path === '/admin/tax-settings') return 'TAX_SETTINGS';
@@ -117,7 +116,7 @@ export const BranchSettingsPage: React.FC = () => {
   };
 
   const [selectedBranchId, setSelectedBranchId] = useState<string>(initialBranchId);
-  const [activeTab, setActiveTab] = useState<'SALON_PROFILE' | 'PAYMENT_ACCOUNTS' | 'TAX_SETTINGS' | 'DATA_RESET' | 'DEVICE_INTEGRATION'>(
+  const [activeTab, setActiveTab] = useState<'SALON_PROFILE' | 'PAYMENT_ACCOUNTS' | 'TAX_SETTINGS' | 'DEVICE_INTEGRATION'>(
     getTabFromPath(pathname)
   );
 
@@ -142,14 +141,6 @@ export const BranchSettingsPage: React.FC = () => {
     setActiveTab(getTabFromPath(pathname));
   }, [pathname]);
 
-  // Test data reset states
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
-  const [resetConfirmationText, setResetConfirmationText] = useState('');
-  const [wipeClients, setWipeClients] = useState(true);
-  const [wipeSuppliers, setWipeSuppliers] = useState(true);
-  const [wipeCatalogue, setWipeCatalogue] = useState(false);
-  const [wipeStaff, setWipeStaff] = useState(false);
 
   // Branch entity & lists
   const [currentBranch, setCurrentBranch] = useState<Branch | null>(null);
@@ -714,35 +705,6 @@ export const BranchSettingsPage: React.FC = () => {
     }
   };
 
-  // Handler: Execute Data Reset
-  const handleExecuteDataReset = async () => {
-    if (resetConfirmationText.trim().toUpperCase() !== 'RESET') {
-      toast.error('Please type "RESET" in capital letters to confirm.');
-      return;
-    }
-    setIsResetting(true);
-    try {
-      const res = await salonService.resetTestData({
-        branchId: selectedBranchId,
-        wipeClients,
-        wipeSuppliers,
-        wipeCatalogue,
-        wipeStaff,
-      });
-      toast.success(res.message || 'Test data has been successfully reset.');
-      setIsResetModalOpen(false);
-      setResetConfirmationText('');
-      loadBranchSettings();
-      setTimeout(() => {
-        window.location.reload();
-      }, 700);
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to reset test data.');
-    } finally {
-      setIsResetting(false);
-    }
-  };
-
   if (!isSuperAdmin && ['/admin/payment-accounts', '/admin/tax-settings'].includes(pathname)) return <AccessDeniedView attemptedPath={pathname} />;
 
   if (isSuperAdmin && !selectedBranchId) {
@@ -801,19 +763,12 @@ export const BranchSettingsPage: React.FC = () => {
                   <span>Hardware & Device Integration</span>
                 </>
               )}
-              {activeTab === 'DATA_RESET' && (
-                <>
-                  <RotateCcw className="w-6 h-6 text-rose-600" />
-                  <span>Operational Data Reset</span>
-                </>
-              )}
-            </h1>
+</h1>
             <p className="text-xs text-slate-500 mt-1">
               {activeTab === 'SALON_PROFILE' && `Manage salon business name, official logo, contact information, and address for ${currentBranch?.name || 'this branch'}.`}
               {activeTab === 'PAYMENT_ACCOUNTS' && `Active payment collection accounts and bank settlement channels for ${currentBranch?.name || 'this salon'}.`}
               {activeTab === 'TAX_SETTINGS' && `Configure provincial sales tax, tax authority, and invoice tax rules for ${currentBranch?.name || 'this branch'}.`}
               {activeTab === 'DEVICE_INTEGRATION' && `Manage connected biometric attendance, POS printers and cash drawers for ${currentBranch?.name || 'this branch'}.`}
-              {activeTab === 'DATA_RESET' && `Reset operational data, bookings, bills, and registers.`}
             </p>
           </div>
 
@@ -1488,75 +1443,6 @@ export const BranchSettingsPage: React.FC = () => {
           </div>
         )}
 
-        {/* --- TAB 3: DATA RESET (TESTING & ENVIRONMENT RESTORATION) --- */}
-        {activeTab === 'DATA_RESET' && (
-          <div className="space-y-6 mt-4">
-            <Card padding="md" className="bg-white border-slate-200 space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-sm text-rose-900 flex items-center gap-2">
-                    <Database className="w-4 h-4 text-rose-600" />
-                    Operational & Transactional Data Reset
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Reset testing records (sales invoices, appointments, attendance, cash custody, purchases & ledgers) back to 0.
-                  </p>
-                </div>
-
-                <Button
-                  variant="danger"
-                  size="sm"
-                  leftIcon={<RotateCcw className="w-3.5 h-3.5" />}
-                  onClick={() => {
-                    setResetConfirmationText('');
-                    setIsResetModalOpen(true);
-                  }}
-                >
-                  Reset Test Data
-                </Button>
-              </div>
-
-              <div className="p-4 rounded-xl border border-rose-200 bg-rose-50/60 text-xs text-rose-900 space-y-3">
-                <div className="flex items-start gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-bold text-rose-950">How Testing Reset Works:</h4>
-                    <p className="text-rose-800 text-xs mt-0.5 leading-relaxed">
-                      Use this tool during system testing and quality assurance to clear dummy test transactions and reset registers to clean zero states.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-rose-200/80">
-                  <div className="bg-white/80 p-3 rounded-lg border border-rose-100">
-                    <span className="font-bold text-rose-900 block mb-1">🗑️ What Will Be Reset to 0:</span>
-                    <ul className="space-y-1 text-slate-700 list-disc list-inside text-[11px]">
-                      <li>Invoices, POS orders, refunds and payment lines</li>
-                      <li>Appointments calendar and booking history</li>
-                      <li>Cash drawer sessions, movements and daily settlements</li>
-                      <li>Attendance clock-ins, punches, leaves and overtime records</li>
-                      <li>Inventory purchase bills, supplier returns and supplier ledgers</li>
-                      <li>Expenses, general ledger journal movements and audit trails</li>
-                      <li>Invoice and Purchase Order sequential numbering counters</li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-white/80 p-3 rounded-lg border border-emerald-100">
-                    <span className="font-bold text-emerald-900 block mb-1">🔒 What Remains Completely Safe:</span>
-                    <ul className="space-y-1 text-slate-700 list-disc list-inside text-[11px]">
-                      <li><strong>Administrator Logins & Credentials:</strong> Kept intact, you will not be logged out.</li>
-                      <li><strong>Branch Profiles:</strong> Locations, opening float rules, and branch definitions.</li>
-                      <li><strong>Services & Catalogues:</strong> Service list, categories and bundles (unless checked).</li>
-                      <li><strong>Staff Members:</strong> Employee profiles and compensation rates (unless checked).</li>
-                      <li><strong>Tax Rules & Accounts:</strong> Form configurations and payment account bindings.</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        )}
-
         {/* --- TAB 4: HARDWARE & DEVICE INTEGRATION --- */}
         {activeTab === 'DEVICE_INTEGRATION' && (
           <div className="mt-4">
@@ -1875,122 +1761,6 @@ export const BranchSettingsPage: React.FC = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* --- MODAL: RESET TEST DATA CONFIRMATION --- */}
-      <Dialog open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <div className="flex items-center gap-2 text-rose-600 mb-1">
-              <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center">
-                <RotateCcw className="w-4 h-4 text-rose-600" />
-              </div>
-              <Badge variant="destructive" className="bg-rose-100 text-rose-700 border-rose-300">
-                Testing Utility
-              </Badge>
-            </div>
-            <DialogTitle className="text-base font-bold text-slate-900">
-              Reset Testing & Operational Data
-            </DialogTitle>
-            <DialogDescription className="text-xs text-slate-500">
-              This will wipe test transactions for <strong>{currentBranch?.name || 'Selected Branch'}</strong> and reset all financial registers and sequence numbers to 0.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2 text-xs">
-            {/* Warning Box */}
-            <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/80 text-amber-900 space-y-1">
-              <span className="font-bold flex items-center gap-1.5 text-amber-950">
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                Permanent Action
-              </span>
-              <p className="text-[11px] leading-relaxed">
-                Sales bills, appointments, attendance, staff loans & advances, payroll runs, cash custody, purchases, and supplier khata will be deleted. Admin logins and branch setup will remain safe.
-              </p>
-            </div>
-
-            {/* Options */}
-            <div className="space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50/50">
-              <span className="font-bold text-slate-700 block mb-1">Cleanup Options:</span>
-              <label className="flex items-center gap-2 cursor-pointer text-slate-800">
-                <Checkbox
-                  checked={wipeClients}
-                  onCheckedChange={(val) => setWipeClients(!!val)}
-                />
-                <span>Delete test customers / clients</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-slate-800">
-                <Checkbox
-                  checked={wipeSuppliers}
-                  onCheckedChange={(val) => setWipeSuppliers(!!val)}
-                />
-                <span>Delete test suppliers (or reset their balance to 0)</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-slate-800">
-                <Checkbox
-                  checked={wipeStaff}
-                  onCheckedChange={(val) => setWipeStaff(!!val)}
-                />
-                <span className="text-rose-700">Delete staff directory profiles (Users/Logins are always preserved)</span>
-              </label>
-
-              <label className="flex items-center gap-2 cursor-pointer text-slate-800">
-                <Checkbox
-                  checked={wipeCatalogue}
-                  onCheckedChange={(val) => setWipeCatalogue(!!val)}
-                />
-                <span className="text-rose-700">Delete service & inventory product catalogue</span>
-              </label>
-            </div>
-
-            {/* Confirmation input */}
-            <div>
-              <label className="font-semibold text-slate-700 block mb-1">
-                Type <strong className="text-rose-600 font-mono">RESET</strong> to confirm:
-              </label>
-              <Input
-                placeholder="RESET"
-                value={resetConfirmationText}
-                onChange={(e) => setResetConfirmationText(e.target.value)}
-                className="font-mono text-xs uppercase"
-              />
-            </div>
-          </div>
-
-          <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={isResetting}
-              onClick={() => setIsResetModalOpen(false)}
-              className="text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              disabled={resetConfirmationText.trim().toUpperCase() !== 'RESET' || isResetting}
-              onClick={handleExecuteDataReset}
-              className="text-xs gap-1.5"
-            >
-              {isResetting ? (
-                <>
-                  <RotateCcw className="w-3.5 h-3.5 animate-spin" />
-                  Resetting Data...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Confirm & Reset All Test Data
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

@@ -355,6 +355,7 @@ export interface SalonServiceContract {
   createService(service: Omit<ServiceItem, 'id'>, actor?: User): Promise<ServiceItem>;
   updateService(id: string, service: Partial<ServiceItem>, actor?: User): Promise<ServiceItem>;
   toggleServiceStatus(id: string, actor?: User): Promise<ServiceItem>;
+  deleteService(id: string, actor?: User): Promise<{ success: boolean; message: string }>;
   bulkImportServices(branchId: string, rows: any[], actor?: User): Promise<CatalogueImportResult>;
 
   getPackages(branchId: string | 'ALL'): Promise<PackageItem[]>;
@@ -362,6 +363,7 @@ export interface SalonServiceContract {
   createPackage(pkg: Omit<PackageItem, 'id'>, actor?: User): Promise<PackageItem>;
   updatePackage(id: string, pkg: Partial<PackageItem>, actor?: User): Promise<PackageItem>;
   togglePackageStatus(id: string, actor?: User): Promise<PackageItem>;
+  deletePackage(id: string, actor?: User): Promise<{ success: boolean; message: string }>;
   bulkImportPackages(branchId: string, rows: any[], actor?: User): Promise<CatalogueImportResult>;
 
   getServiceCategories(branchId: string): Promise<ServiceCategory[]>;

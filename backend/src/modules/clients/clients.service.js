@@ -4,7 +4,7 @@
 import prisma from '../../config/prisma.js';
 import { auditLog } from '../../lib/audit.js';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/AppError.js';
-import { assertBranchAccess, resolveReadBranch, resolveWriteBranch } from '../../lib/scope.js';
+import { assertBranchAccess, resolveReadBranch, resolveWriteBranch, salesWhere } from '../../lib/scope.js';
 import { ymd } from '../../lib/dates.js';
 import { toDec } from '../../lib/money.js';
 import { formatPhoneNumber, normalizePhoneDigits } from '../../lib/phone.js';
@@ -16,19 +16,19 @@ const OPEN_INVOICE = { status: { in: ['UNPAID', 'PARTIAL'] }, lifecycle: { not: 
  * Derived stats per client: outstanding dues and distinct visit dates
  * (a day with an invoice or a completed appointment counts once).
  */
-export const clientStats = async (clientIds, tx = prisma) => {
+export const clientStats = async (clientIds, tx = prisma, actor) => {
   const stats = new Map(clientIds.map((id) => [id, { outstandingBalance: 0, totalVisits: 0, lastVisitDate: undefined }]));
   if (!clientIds.length) return stats;
 
   const dues = await tx.invoice.groupBy({
-    by: ['clientId'], where: { clientId: { in: clientIds }, ...OPEN_INVOICE }, _sum: { amountDue: true },
+    by: ['clientId'], where: { clientId: { in: clientIds }, ...(actor ? salesWhere(actor) : {}), ...OPEN_INVOICE }, _sum: { amountDue: true },
   });
   for (const d of dues) stats.get(d.clientId).outstandingBalance = toDec(d._sum.amountDue ?? 0).toNumber();
 
   const invoiceDays = await tx.invoice.findMany({
-    where: { clientId: { in: clientIds }, lifecycle: { not: 'VOIDED' } }, select: { clientId: true, date: true }, distinct: ['clientId', 'date'],
+    where: { clientId: { in: clientIds }, ...(actor ? salesWhere(actor) : {}), lifecycle: { not: 'VOIDED' } }, select: { clientId: true, date: true }, distinct: ['clientId', 'date'],
   });
-  const apptDays = await tx.appointment.findMany({
+  const apptDays = actor?.role === 'ACCOUNTANT' ? [] : await tx.appointment.findMany({
     where: { clientId: { in: clientIds }, status: 'COMPLETED' }, select: { clientId: true, date: true }, distinct: ['clientId', 'date'],
   });
   const days = new Map();
@@ -44,8 +44,8 @@ export const clientStats = async (clientIds, tx = prisma) => {
   return stats;
 };
 
-const withStats = async (clients, tx) => {
-  const stats = await clientStats(clients.map((c) => c.id), tx);
+const withStats = async (clients, tx, actor) => {
+  const stats = await clientStats(clients.map((c) => c.id), tx, actor);
   return clients.map((c) => toClientDTO(c, stats.get(c.id)));
 };
 
@@ -77,7 +77,7 @@ export const listClients = async (actor, { branchId, search, includeArchived } =
     } : {}),
   };
   const clients = await prisma.client.findMany({ where, orderBy: { name: 'asc' } });
-  return withStats(clients);
+  return withStats(clients, prisma, actor);
 };
 
 export const getClient = async (actor, id) => {
@@ -85,7 +85,7 @@ export const getClient = async (actor, id) => {
   const c = await prisma.client.findUnique({ where: { id } });
   if (!c) return null;
   assertBranchAccess(actor, c.branchId, 'Access Denied: Cannot access customer records from another branch.');
-  return (await withStats([c]))[0];
+  return (await withStats([c], prisma, actor))[0];
 };
 
 /** POS / booking quick search: by name or any part of the phone digits. Empty query → first 10. */
@@ -106,7 +106,7 @@ export const searchClients = async (actor, { branchId, q }) => {
     } : {}),
   };
   const clients = await prisma.client.findMany({ where, orderBy: { name: 'asc' }, take: query ? 50 : 10 });
-  return withStats(clients);
+  return withStats(clients, prisma, actor);
 };
 
 // ── Commands ─────────────────────────────────────────────────────────────────
@@ -187,7 +187,7 @@ export const updateClient = async (id, input, actor) => {
 
     const c = await tx.client.update({ where: { id }, data });
     await auditLog(tx, { userId: actor.id, userName: actor.name, action: 'CLIENT_UPDATED', entity: 'Client', entityId: id, branchId: c.branchId, before, after: c });
-    return (await withStats([c], tx))[0];
+    return (await withStats([c], tx, actor))[0];
   });
 };
 
@@ -201,6 +201,6 @@ export const archiveClient = async (id, isArchived, actor) => {
       userId: actor.id, userName: actor.name, action: isArchived ? 'CLIENT_ARCHIVED' : 'CLIENT_RESTORED',
       entity: 'Client', entityId: id, branchId: c.branchId,
     });
-    return (await withStats([c], tx))[0];
+    return (await withStats([c], tx, actor))[0];
   });
 };

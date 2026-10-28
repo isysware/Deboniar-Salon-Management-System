@@ -14,8 +14,9 @@ export const getGeneralLedger = async (actor, query) => {
   const includeBank = channel === 'ALL' || channel === 'BANK';
 
   // Base scope filters
-  const drawerWhere = {};
-  const accountWhere = {};
+  const personalScope = actor.role === 'ACCOUNTANT' ? { userId: actor.id } : {};
+  const drawerWhere = { ...personalScope };
+  const accountWhere = { ...personalScope };
 
   if (branchId) {
     drawerWhere.branchId = branchId;
@@ -49,7 +50,7 @@ export const getGeneralLedger = async (actor, query) => {
 
   // Calculate opening balance
   let openingBalance = toDec(0);
-  if (includeBank && !query.drawerId) {
+  if (includeBank && !query.drawerId && actor.role !== 'ACCOUNTANT') {
     const accWhere = {};
     if (branchId) accWhere.branchId = branchId;
     if (query.accountId) accWhere.id = query.accountId;
@@ -68,6 +69,7 @@ export const getGeneralLedger = async (actor, query) => {
         ? prisma.drawerMovement.aggregate({
             _sum: { amount: true },
             where: {
+              ...personalScope,
               ...(branchId ? { branchId } : {}),
               ...(query.drawerId ? { drawerId: query.drawerId } : {}),
               direction: 'IN',
@@ -79,6 +81,7 @@ export const getGeneralLedger = async (actor, query) => {
         ? prisma.drawerMovement.aggregate({
             _sum: { amount: true },
             where: {
+              ...personalScope,
               ...(branchId ? { branchId } : {}),
               ...(query.drawerId ? { drawerId: query.drawerId } : {}),
               direction: 'OUT',
@@ -90,6 +93,7 @@ export const getGeneralLedger = async (actor, query) => {
         ? prisma.accountMovement.aggregate({
             _sum: { amount: true },
             where: {
+              ...personalScope,
               ...(branchId ? { branchId } : {}),
               ...(query.accountId ? { accountId: query.accountId } : {}),
               direction: 'IN',
@@ -101,6 +105,7 @@ export const getGeneralLedger = async (actor, query) => {
         ? prisma.accountMovement.aggregate({
             _sum: { amount: true },
             where: {
+              ...personalScope,
               ...(branchId ? { branchId } : {}),
               ...(query.accountId ? { accountId: query.accountId } : {}),
               direction: 'OUT',

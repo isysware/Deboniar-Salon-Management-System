@@ -1,7 +1,58 @@
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { as } from './helpers.js';
+import prisma from '../src/config/prisma.js';
+import { randomUUID } from 'node:crypto';
+
+let ownInvoice, otherInvoice, seller;
+beforeAll(async () => {
+  seller = (await as('accountant').get('/auth/me')).body.data;
+  const admin = (await as('admin').get('/auth/me')).body.data;
+  const create = (user, amount) => prisma.invoice.create({ data: {
+    invoiceNumber: `ISOLATION-${randomUUID()}`, branchId: seller.branchId,
+    date: new Date('2026-10-15'), time: '12:00', clientName: 'Isolation Customer', clientPhone: '03009998877',
+    subtotal: amount, netSales: amount, total: amount, amountDue: amount,
+    processedByUserId: user.id, processedByName: user.name,
+  } });
+  ownInvoice = await create(seller, 125);
+  otherInvoice = await create(admin, 975);
+});
 
 describe('Accountant Salesman & Reporting Scope Isolation', () => {
+  it('returns only own seeded sales even with forged seller filters, while admins see both', async () => {
+    for (const endpoint of ['/invoices', '/reports/sales-invoices']) {
+      const query = `startDate=2026-10-01&endDate=2026-10-31&soldByUserId=${otherInvoice.processedByUserId}&userId=${otherInvoice.processedByUserId}`;
+      const res = await as('accountant').get(`${endpoint}?${query}`);
+      expect(res.status).toBe(200);
+      const rows = res.body.data.rows ?? res.body.data;
+      expect(rows.some((r) => r.id === ownInvoice.id || r.invoiceId === ownInvoice.id)).toBe(true);
+      expect(rows.some((r) => r.id === otherInvoice.id || r.invoiceId === otherInvoice.id)).toBe(false);
+      for (const role of ['admin', 'super']) {
+        const all = await as(role).get(`${endpoint}?startDate=2026-10-01&endDate=2026-10-31`);
+        expect(all.status).toBe(200);
+        const allRows = all.body.data.rows ?? all.body.data;
+        for (const invoice of [ownInvoice, otherInvoice]) expect(allRows.some((r) => r.id === invoice.id || r.invoiceId === invoice.id)).toBe(true);
+      }
+    }
+  });
+
+  it('blocks direct invoice and refund URLs and scopes POS outstanding dues', async () => {
+    expect((await as('accountant').get(`/invoices/${otherInvoice.id}`)).status).toBe(403);
+    expect((await as('accountant').get(`/invoices/${otherInvoice.id}/refunds`)).status).toBe(403);
+    expect((await as('accountant').get(`/invoices/${ownInvoice.id}`)).status).toBe(200);
+    const res = await as('accountant').get('/invoices/outstanding?clientIdOrPhone=03009998877');
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((r) => r.id)).toContain(ownInvoice.id);
+    expect(res.body.data.map((r) => r.id)).not.toContain(otherInvoice.id);
+  });
+
+  it('blocks business-wide financial endpoints but retains POS catalog reads', async () => {
+    for (const path of ['/reports/operating-profit', '/reports/inventory', '/inventory/cogs-report', '/inventory/summary', '/stock-movements', '/purchases']) {
+      expect((await as('accountant').get(path)).status, path).toBe(403);
+    }
+    for (const path of ['/services', '/packages', '/inventory/items', '/inventory/batches', '/payment-accounts']) {
+      expect((await as('accountant').get(path)).status, path).toBe(200);
+    }
+  });
   it('enforces that accountants only retrieve their own sales in /reports/sales-invoices', async () => {
     const accountantRes = await as('accountant').get('/reports/sales-invoices?preset=THIS_MONTH');
     expect(accountantRes.status).toBe(200);

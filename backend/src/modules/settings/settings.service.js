@@ -5,6 +5,7 @@ import prisma from '../../config/prisma.js';
 import { auditLog } from '../../lib/audit.js';
 import { badRequest, conflict, notFound, forbidden } from '../../lib/AppError.js';
 import { accountBalances } from '../../lib/balances.js';
+import { toDec } from '../../lib/money.js';
 import { assertBranchAccess, resolveReadBranch, resolveWriteBranch } from '../../lib/scope.js';
 import { getBusinessDate, setBusinessDate } from '../../lib/dates.js';
 import * as branches from '../branches/branches.service.js';
@@ -132,7 +133,17 @@ export const setBranchDefaultTaxRule = async ({ branchId: requested, ruleId }, a
 
 // ═══ PAYMENT ACCOUNTS ═════════════════════════════════════════════════════════
 
-const withBalances = async (accounts, mapper, branchId) => {
+const withBalances = async (accounts, mapper, branchId, actor) => {
+  if (actor?.role === 'ACCOUNTANT') {
+    const movements = await prisma.accountMovement.groupBy({
+      by: ['accountId', 'direction'],
+      where: { accountId: { in: accounts.map((a) => a.id) }, branchId, userId: actor.id },
+      _sum: { amount: true },
+    });
+    return accounts.map((a) => mapper(a, movements.filter((m) => m.accountId === a.id).reduce(
+      (sum, m) => m.direction === 'IN' ? sum.plus(m._sum.amount ?? 0) : sum.minus(m._sum.amount ?? 0), toDec(0),
+    )));
+  }
   const balances = await accountBalances(accounts.map((a) => a.id), { ...(branchId ? { branchIds: [branchId] } : {}) });
   return accounts.map((a) => mapper(a, balances.get(a.id)));
 };
@@ -140,13 +151,13 @@ const withBalances = async (accounts, mapper, branchId) => {
 export const listPaymentAccounts = async (actor, branchId) => {
   const b = resolveReadBranch(actor, branchId);
   const accounts = await prisma.paymentAccount.findMany({ where: b ? membership(b) : {}, include: { branches: true }, orderBy: { createdAt: 'asc' } });
-  return withBalances(accounts, toPaymentAccountDTO, b);
+  return withBalances(accounts, toPaymentAccountDTO, b, actor);
 };
 
 export const listOnlineAccounts = async (actor, branchId) => {
   const b = resolveReadBranch(actor, branchId);
   const accounts = await prisma.paymentAccount.findMany({ where: b ? membership(b) : {}, include: { branches: true }, orderBy: { createdAt: 'asc' } });
-  return withBalances(accounts, toOnlineAccountDTO, b);
+  return withBalances(accounts, toOnlineAccountDTO, b, actor);
 };
 
 const accountDTO = async (account) => (await withBalances([await prisma.paymentAccount.findUnique({ where: { id: account.id }, include: { branches: true } })], toPaymentAccountDTO))[0];
@@ -346,6 +357,9 @@ export const setSystemDate = async (date, actor) => {
 // ═══ TEST DATA RESET ══════════════════════════════════════════════════════════
 
 export const resetTestData = async (input = {}, actor) => {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_RESET_TEST_DATA !== 'true') {
+    throw forbidden('FORBIDDEN', 'Test data reset is strictly disabled in production environment.');
+  }
   if (!['SUPER_ADMIN', 'ADMIN'].includes(actor.role)) {
     throw forbidden('FORBIDDEN', 'Access Denied: Only administrators can reset system test data.');
   }

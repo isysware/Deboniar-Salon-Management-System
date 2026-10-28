@@ -75,10 +75,10 @@ describe('Financial Reports Suite API Contract (Sales, Income/Expense, Operating
   });
 
   describe('Operating Profit Report (/reports/operating-profit)', () => {
-    it('blocks staff and allows admin and accountant', async () => {
+    it('blocks staff and sales users and allows admin', async () => {
       expect((await as('staff').get('/reports/operating-profit')).status).toBe(403);
       expect((await as('admin').get('/reports/operating-profit?preset=THIS_MONTH')).status).toBe(200);
-      expect((await as('accountant').get('/reports/operating-profit?preset=THIS_MONTH')).status).toBe(200);
+      expect((await as('accountant').get('/reports/operating-profit?preset=THIS_MONTH')).status).toBe(403);
     });
 
     it('returns structured 5-section statement rows and detailed rows', async () => {

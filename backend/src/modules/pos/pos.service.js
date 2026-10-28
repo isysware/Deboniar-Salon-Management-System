@@ -11,7 +11,7 @@ import prisma from '../../config/prisma.js';
 import { paymentPosting } from '../../lib/paymentPosting.js';
 import { auditLog } from '../../lib/audit.js';
 import { badRequest, conflict, forbidden, notFound } from '../../lib/AppError.js';
-import { assertBranchAccess, resolveReadBranch, resolveWriteBranch } from '../../lib/scope.js';
+import { assertBranchAccess, assertInvoiceAccess, salesWhere, resolveReadBranch, resolveWriteBranch } from '../../lib/scope.js';
 import { dateOnly, getBusinessDate, toTimeString } from '../../lib/dates.js';
 import { round2, splitWithRemainder, toDec } from '../../lib/money.js';
 import { nextSequence } from '../../lib/sequence.js';
@@ -66,7 +66,7 @@ export const getInvoice = async (actor, id) => {
   const inv = await prisma.invoice.findUnique({ where: { id }, include: invoiceInclude });
   if (!inv) return null;
   if (actor.role === 'STAFF') throw forbidden('FORBIDDEN', 'Access Denied: Staff members cannot access invoices.');
-  assertBranchAccess(actor, inv.branchId, 'Access Denied: Cannot access invoices from another branch.');
+  assertInvoiceAccess(actor, inv);
   return toInvoiceDTO(inv);
 };
 
@@ -75,7 +75,7 @@ export const clientOutstanding = async (actor, { branchId, clientIdOrPhone }) =>
   const b = resolveWriteBranch(actor, branchId);
   const digits = normalizePhoneDigits(clientIdOrPhone);
   const rows = await prisma.invoice.findMany({
-    where: { branchId: b, status: { in: ['UNPAID', 'PARTIAL'] }, amountDue: { gt: 0 }, lifecycle: { not: 'VOIDED' } },
+    where: { branchId: b, ...salesWhere(actor), status: { in: ['UNPAID', 'PARTIAL'] }, amountDue: { gt: 0 }, lifecycle: { not: 'VOIDED' } },
     include: invoiceInclude,
     orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
   });
@@ -518,7 +518,7 @@ export const collectPayment = async (input, actor, request) => {
   return paymentPosting(actor, request, async (tx) => {
     await tx.$executeRaw`SELECT 1 FROM "Invoice" WHERE id = ${input.invoiceId} FOR UPDATE`;
     const invoice = await loadInvoice(tx, input.invoiceId);
-    assertBranchAccess(actor, invoice.branchId, 'Access Denied: Cannot collect payment for another branch.');
+    assertInvoiceAccess(actor, invoice);
     if (invoice.lifecycle === 'VOIDED') throw conflict('INVOICE_VOIDED', `Invoice '${invoice.invoiceNumber}' has been voided.`);
     if (invoice.status === 'PAID' || toDec(invoice.amountDue).lessThanOrEqualTo(0)) {
       throw conflict('INVOICE_PAID', `Invoice '${invoice.invoiceNumber}' is already fully paid.`);
@@ -564,7 +564,7 @@ export const collectPayment = async (input, actor, request) => {
 export const reverseCollection = (input, actor, request) => paymentPosting(actor, request, async (tx) => {
   await tx.$executeRaw`SELECT 1 FROM "Invoice" WHERE id = ${input.invoiceId} FOR UPDATE`;
   const invoice = await loadInvoice(tx, input.invoiceId);
-  assertBranchAccess(actor, invoice.branchId);
+  assertInvoiceAccess(actor, invoice);
   const payment = invoice.payments.find((p) => p.id === input.paymentId);
   if (!payment || payment.kind !== 'DUES_COLLECTION') throw badRequest('INVALID_COLLECTION', 'Only outstanding invoice collections can be reversed here.');
   if (payment.reversedAt) throw conflict('PAYMENT_REVERSED', 'Collection has already been reversed.');

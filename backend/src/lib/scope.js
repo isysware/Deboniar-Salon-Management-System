@@ -5,13 +5,26 @@ import { forbidden, badRequest } from './AppError.js';
 
 export const isSuperAdmin = (user) => user.role === 'SUPER_ADMIN';
 
+/** Sales portal access is tied to the invoice seller, never a query parameter. */
+export const salesWhere = (user) => user.role === 'ACCOUNTANT' ? { processedByUserId: user.id } : {};
+
+export const assertInvoiceAccess = (user, invoice) => {
+  assertBranchAccess(user, invoice.branchId);
+  if (user.role === 'ACCOUNTANT' && invoice.processedByUserId !== user.id) {
+    throw forbidden('INVOICE_FORBIDDEN', 'You can only access your own sales.');
+  }
+};
+
 /**
  * Resolve which branch a read query should be filtered by.
  * Non-super users are always locked to their own branch.
  * @returns {string|null} branchId, or null meaning "all branches"
  */
 export const resolveReadBranch = (user, requested) => {
-  if (!isSuperAdmin(user)) return user.branchId;
+  if (!isSuperAdmin(user)) {
+    if (!user.branchId) throw forbidden('BRANCH_FORBIDDEN', 'A branch assignment is required.');
+    return user.branchId;
+  }
   if (!requested || requested === 'ALL') return null;
   return requested;
 };
@@ -35,6 +48,7 @@ export const assertBranchAccess = (user, branchId, message = 'Access Denied: Can
  */
 export const resolveWriteBranch = (user, requested, message = 'Access Denied: Cannot modify records of another branch.') => {
   if (!isSuperAdmin(user)) {
+    if (!user.branchId) throw forbidden('BRANCH_FORBIDDEN', 'A branch assignment is required.');
     if (requested && requested !== 'ALL' && requested !== user.branchId) throw forbidden('BRANCH_FORBIDDEN', message);
     return user.branchId;
   }

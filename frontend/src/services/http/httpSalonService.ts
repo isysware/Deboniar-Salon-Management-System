@@ -156,6 +156,7 @@ const liveMethods: SalonServiceContract = {
   createService: (service) => api.post<ServiceItem>('/services', service),
   updateService: (id, service) => api.put<ServiceItem>(`/services/${id}`, service),
   toggleServiceStatus: (id) => api.post<ServiceItem>(`/services/${id}/toggle`),
+  deleteService: (id) => api.delete<{ success: boolean; message: string }>(`/services/${id}`),
   bulkImportServices: (branchId, rows) => api.post<CatalogueImportResult>('/services/bulk-import', { branchId, rows }),
 
   getPackages: (branchId) => api.get<PackageItem[]>('/packages', branchQuery(branchId)),
@@ -163,6 +164,7 @@ const liveMethods: SalonServiceContract = {
   createPackage: (pkg) => api.post<PackageItem>('/packages', pkg),
   updatePackage: (id, pkg) => api.put<PackageItem>(`/packages/${id}`, pkg),
   togglePackageStatus: (id) => api.post<PackageItem>(`/packages/${id}/toggle`),
+  deletePackage: (id) => api.delete<{ success: boolean; message: string }>(`/packages/${id}`),
   bulkImportPackages: (branchId, rows) => api.post<CatalogueImportResult>('/packages/bulk-import', { branchId, rows }),
 
   getServiceCategories: (branchId) => api.get<ServiceCategory[]>('/service-categories', branchQuery(branchId)),

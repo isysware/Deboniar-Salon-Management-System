@@ -128,13 +128,16 @@ export const ServicesPackagesPage: React.FC = () => {
   const [isEditServiceModalOpen, setIsEditServiceModalOpen] = useState(false);
   const [isViewServiceModalOpen, setIsViewServiceModalOpen] = useState(false);
   const [isServiceStatusAlertOpen, setIsServiceStatusAlertOpen] = useState(false);
+  const [isDeleteServiceAlertOpen, setIsDeleteServiceAlertOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
 
   const [isAddPackageModalOpen, setIsAddPackageModalOpen] = useState(false);
   const [isEditPackageModalOpen, setIsEditPackageModalOpen] = useState(false);
   const [isViewPackageModalOpen, setIsViewPackageModalOpen] = useState(false);
   const [isPackageStatusAlertOpen, setIsPackageStatusAlertOpen] = useState(false);
+  const [isDeletePackageAlertOpen, setIsDeletePackageAlertOpen] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<PackageItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Category modal
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -504,6 +507,23 @@ export const ServicesPackagesPage: React.FC = () => {
     }
   };
 
+  // Handler: Delete Service
+  const handleDeleteService = async () => {
+    if (!selectedService) return;
+    setIsDeleting(true);
+    try {
+      const res = await salonService.deleteService(selectedService.id, user || undefined);
+      toast.success(res.message || `Service '${selectedService.name}' deleted successfully.`);
+      setIsDeleteServiceAlertOpen(false);
+      setSelectedService(null);
+      await loadBranchCatalogue();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete service.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Handler: Add Component to Package Form
   const handleAddPackageComponent = (serviceId: string) => {
     const srv = formServices.find((s) => s.id === serviceId);
@@ -634,6 +654,23 @@ export const ServicesPackagesPage: React.FC = () => {
       const msg = err.message || 'Failed to change package status.';
       setErrorMessage(msg);
       toast.error(msg);
+    }
+  };
+
+  // Handler: Delete Package
+  const handleDeletePackage = async () => {
+    if (!selectedPackage) return;
+    setIsDeleting(true);
+    try {
+      const res = await salonService.deletePackage(selectedPackage.id, user || undefined);
+      toast.success(res.message || `Package '${selectedPackage.name}' deleted successfully.`);
+      setIsDeletePackageAlertOpen(false);
+      setSelectedPackage(null);
+      await loadBranchCatalogue();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete package.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1058,6 +1095,16 @@ export const ServicesPackagesPage: React.FC = () => {
                                     </>
                                   )}
                                 </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedService(srv);
+                                    setIsDeleteServiceAlertOpen(true);
+                                  }}
+                                  className="text-xs cursor-pointer gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  Delete Service
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -1217,6 +1264,16 @@ export const ServicesPackagesPage: React.FC = () => {
                                       Activate Package
                                     </>
                                   )}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedPackage(pkg);
+                                    setIsDeletePackageAlertOpen(true);
+                                  }}
+                                  className="text-xs cursor-pointer gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  Delete Package
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
@@ -1851,6 +1908,60 @@ export const ServicesPackagesPage: React.FC = () => {
               }`}
             >
               {selectedPackage?.isActive ? 'Deactivate' : 'Activate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* --- ALERT: DELETE SERVICE --- */}
+      <AlertDialog open={isDeleteServiceAlertOpen} onOpenChange={setIsDeleteServiceAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base text-rose-600 flex items-center gap-2">
+              <Trash2 className="w-4 h-4" />
+              Delete Service Permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+              Are you sure you want to delete <span className="font-semibold text-slate-700">{selectedService?.name}</span> ({selectedService?.code})?
+              <br /><br />
+              This action cannot be undone. If this service is currently part of any active package bundles, deletion will be safely blocked to maintain catalogue integrity.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs" disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteService}
+              disabled={isDeleting}
+              className="text-xs bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Service'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* --- ALERT: DELETE PACKAGE --- */}
+      <AlertDialog open={isDeletePackageAlertOpen} onOpenChange={setIsDeletePackageAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base text-rose-600 flex items-center gap-2">
+              <Trash2 className="w-4 h-4" />
+              Delete Package Permanently?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-500 leading-relaxed">
+              Are you sure you want to delete package bundle <span className="font-semibold text-slate-700">{selectedPackage?.name}</span> ({selectedPackage?.code})?
+              <br /><br />
+              This will remove the package bundle and its component links. Historical invoices and sales receipts already completed will remain preserved.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs" disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePackage}
+              disabled={isDeleting}
+              className="text-xs bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete Package'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

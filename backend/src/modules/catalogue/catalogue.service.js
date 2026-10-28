@@ -146,6 +146,26 @@ export const toggleService = async (id, actor) => {
   return updateService(id, { isActive: !s.isActive }, actor);
 };
 
+export const deleteService = async (id, actor) => {
+  return prisma.$transaction(async (tx) => {
+    const s = await tx.service.findUnique({
+      where: { id },
+      include: { components: { include: { package: true } } },
+    });
+    if (!s) throw notFound('SERVICE_NOT_FOUND', `Service '${id}' not found.`);
+    assertBranchAccess(actor, s.branchId, 'Access Denied: Cannot delete service from another branch.');
+
+    if (s.components && s.components.length > 0) {
+      const pkgNames = [...new Set(s.components.map((c) => c.package?.name).filter(Boolean))].join(', ');
+      throw badRequest('SERVICE_IN_USE', `Cannot delete service '${s.name}' because it is included in package(s): ${pkgNames}. Please remove it from the package(s) or delete the package(s) first.`);
+    }
+
+    await tx.service.delete({ where: { id } });
+    await audit(tx, actor, 'SERVICE_DELETED', 'Service', id, s.branchId, s, null);
+    return { success: true, message: `Service '${s.name}' deleted successfully.` };
+  });
+};
+
 // ═══ PACKAGES ═════════════════════════════════════════════════════════════════
 
 /** Validates components (same branch, active services, weights total exactly 100%). */
@@ -284,6 +304,18 @@ export const togglePackage = async (id, actor) => {
   return updatePackage(id, { isActive: !p.isActive }, actor);
 };
 
+export const deletePackage = async (id, actor) => {
+  return prisma.$transaction(async (tx) => {
+    const p = await tx.package.findUnique({ where: { id } });
+    if (!p) throw notFound('PACKAGE_NOT_FOUND', `Package '${id}' not found.`);
+    assertBranchAccess(actor, p.branchId, 'Access Denied: Cannot delete package from another branch.');
+
+    await tx.package.delete({ where: { id } });
+    await audit(tx, actor, 'PACKAGE_DELETED', 'Package', id, p.branchId, p, null);
+    return { success: true, message: `Package '${p.name}' deleted successfully.` };
+  });
+};
+
 export const bulkImportServices = async ({ branchId: requested, rows }, actor) => {
   const branchId = resolveWriteBranch(actor, requested, 'Access Denied: Cannot import services for another branch.');
   return prisma.$transaction(async (tx) => {
@@ -322,7 +354,9 @@ export const bulkImportServices = async ({ branchId: requested, rows }, actor) =
             continue;
           }
         } else {
-          code = await generateNextServiceCode(tx);
+          do {
+            code = await generateNextServiceCode(tx);
+          } while (seenCodes.has(code));
         }
         seenCodes.add(code);
 
@@ -412,7 +446,9 @@ export const bulkImportPackages = async ({ branchId: requested, rows }, actor) =
             continue;
           }
         } else {
-          code = await generateNextPackageCode(tx);
+          do {
+            code = await generateNextPackageCode(tx);
+          } while (seenCodes.has(code));
         }
         seenCodes.add(code);
 

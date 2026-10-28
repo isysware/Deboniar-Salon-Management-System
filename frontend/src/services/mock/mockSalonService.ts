@@ -2133,6 +2133,34 @@ class MockSalonService implements SalonServiceContract {
     return { ...service };
   }
 
+  async deleteService(id: string, actor?: User): Promise<{ success: boolean; message: string }> {
+    const authenticatedActor = this.getAuthenticatedActor(actor);
+    if (authenticatedActor.role !== 'SUPER_ADMIN' && authenticatedActor.role !== 'ADMIN') {
+      throw new Error('Access Denied: Only Administrators can delete services.');
+    }
+
+    const store = mockStorage.getStore();
+    const serviceIndex = store.services.findIndex((s) => s.id === id);
+    if (serviceIndex === -1) {
+      throw new Error(`Service '${id}' not found.`);
+    }
+
+    const service = store.services[serviceIndex];
+    if (authenticatedActor.role === 'ADMIN' && service.branchId !== authenticatedActor.branchId) {
+      throw new Error('Access Denied: Cannot delete service from another branch.');
+    }
+
+    const containingPackages = store.packages.filter((p) => p.components.some((c) => c.serviceId === id));
+    if (containingPackages.length > 0) {
+      const names = containingPackages.map((p) => p.name).join(', ');
+      throw new Error(`Cannot delete service '${service.name}' because it is included in package(s): ${names}. Remove it from the package(s) first.`);
+    }
+
+    store.services.splice(serviceIndex, 1);
+    mockStorage.saveStore(store);
+    return { success: true, message: `Service '${service.name}' deleted successfully.` };
+  }
+
   // --- PHASE 2B: PACKAGES ---
 
   async getPackages(branchId: string | 'ALL'): Promise<PackageItem[]> {
@@ -2263,6 +2291,28 @@ class MockSalonService implements SalonServiceContract {
     pkg.isActive = !pkg.isActive;
     mockStorage.saveStore(store);
     return { ...pkg };
+  }
+
+  async deletePackage(id: string, actor?: User): Promise<{ success: boolean; message: string }> {
+    const authenticatedActor = this.getAuthenticatedActor(actor);
+    if (authenticatedActor.role !== 'SUPER_ADMIN' && authenticatedActor.role !== 'ADMIN') {
+      throw new Error('Access Denied: Only Administrators can delete packages.');
+    }
+
+    const store = mockStorage.getStore();
+    const pkgIndex = store.packages.findIndex((p) => p.id === id);
+    if (pkgIndex === -1) {
+      throw new Error(`Package '${id}' not found.`);
+    }
+
+    const pkg = store.packages[pkgIndex];
+    if (authenticatedActor.role === 'ADMIN' && pkg.branchId !== authenticatedActor.branchId) {
+      throw new Error('Access Denied: Cannot delete package from another branch.');
+    }
+
+    store.packages.splice(pkgIndex, 1);
+    mockStorage.saveStore(store);
+    return { success: true, message: `Package '${pkg.name}' deleted successfully.` };
   }
 
   async bulkImportServices(branchId: string, rows: any[], actor?: User): Promise<CatalogueImportResult> {

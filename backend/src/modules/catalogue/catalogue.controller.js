@@ -21,6 +21,7 @@ export const createService = send((req) => s.createService(req.body, req.user), 
 export const bulkImportServices = send((req) => s.bulkImportServices(req.body, req.user));
 export const updateService = send((req) => s.updateService(req.params.id, req.body, req.user));
 export const toggleService = send((req) => s.toggleService(req.params.id, req.user));
+export const deleteService = send((req) => s.deleteService(req.params.id, req.user));
 
 export const listPackages  = send((req) => s.listPackages(req.user, req.query.branchId));
 export const getPackage    = send(async (req) => {
@@ -32,4 +33,6 @@ export const createPackage = send((req) => s.createPackage(req.body, req.user), 
 export const bulkImportPackages = send((req) => s.bulkImportPackages(req.body, req.user));
 export const updatePackage = send((req) => s.updatePackage(req.params.id, req.body, req.user));
 export const togglePackage = send((req) => s.togglePackage(req.params.id, req.user));
+export const deletePackage = send((req) => s.deletePackage(req.params.id, req.user));
+
 

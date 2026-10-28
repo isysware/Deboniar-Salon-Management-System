@@ -6,7 +6,7 @@
 import prisma from '../../config/prisma.js';
 import { auditLog } from '../../lib/audit.js';
 import { badRequest, conflict, forbidden } from '../../lib/AppError.js';
-import { assertBranchAccess } from '../../lib/scope.js';
+import { assertInvoiceAccess, assertBranchAccess } from '../../lib/scope.js';
 import { dateOnly, getBusinessDate } from '../../lib/dates.js';
 import { round2, splitWithRemainder, toDec } from '../../lib/money.js';
 import { nextSequence } from '../../lib/sequence.js';
@@ -199,9 +199,9 @@ export const refundInvoice = async (input, actor) => {
 const Decimal_max0 = (d) => (d.lessThan(0) ? toDec(0) : d);
 
 export const listRefunds = async (actor, invoiceId) => {
-  const inv = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { branchId: true } });
+  const inv = await prisma.invoice.findUnique({ where: { id: invoiceId }, select: { branchId: true, processedByUserId: true } });
   if (!inv) throw badRequest('INVOICE_NOT_FOUND', `Invoice '${invoiceId}' not found.`);
-  assertBranchAccess(actor, inv.branchId);
+  assertInvoiceAccess(actor, inv);
   const rows = await prisma.invoiceRefund.findMany({ where: { invoiceId }, include: { lines: true }, orderBy: { createdAt: 'asc' } });
   return rows.map((r) => ({
     id: r.id, refundNumber: r.refundNumber, type: r.type, refundDate: r.refundDate.toISOString().slice(0, 10),

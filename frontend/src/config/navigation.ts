@@ -372,7 +372,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
             id: 'rep-op-profit',
             label: 'Operating Profit (P&L)',
             href: '/reports/operating-profit',
-            allowedRoles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
+            allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
           },
           {
             id: 'rep-detailed-inc',
@@ -516,7 +516,7 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
         href: '/admin/users',
         iconName: 'ShieldCheck',
         allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
-        description: 'User access credentials, immutable audit logs & test data reset',
+        description: 'User access credentials and immutable audit logs',
         children: [
           {
             id: 'users-access-child',
@@ -528,12 +528,6 @@ export const NAVIGATION_GROUPS: NavGroup[] = [
             id: 'activity-log-child',
             label: 'Audit & Activity Log',
             href: '/admin/activity-log',
-            allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
-          },
-          {
-            id: 'data-reset-child',
-            label: 'Reset Test Data (Zero Registers)',
-            href: '/admin/data-reset',
             allowedRoles: ['SUPER_ADMIN', 'ADMIN'],
           },
         ],

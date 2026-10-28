@@ -21,10 +21,8 @@ import {
   PanelLeftClose,
   PanelLeft,
   Calendar,
-  RotateCcw,
   Bell,
 } from 'lucide-react';
-import { ResetDataModal } from '@/components/modals/ResetDataModal';
 
 interface HeaderProps {
   isSidebarCollapsed: boolean;
@@ -94,7 +92,6 @@ export const Header: React.FC<HeaderProps> = ({
 
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
 
   const roleMeta: Record<string, { label: string; variant: 'primary' | 'secondary' | 'success' | 'warning' | 'default' }> = {
     SUPER_ADMIN: { label: 'Super Admin', variant: 'primary' },
@@ -175,18 +172,6 @@ export const Header: React.FC<HeaderProps> = ({
           />
         </div>
 
-        {/* QUICK RESET DATA BUTTON (VISIBLE IN FRONT FOR TESTING) */}
-        {(user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') && (
-          <button
-            type="button"
-            onClick={() => setIsResetModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-rose-200 bg-rose-50/90 hover:bg-rose-100 text-rose-700 hover:text-rose-800 text-xs font-semibold transition-all cursor-pointer shadow-2xs hover:border-rose-300"
-            title="Reset operational & test data (Wipe bills, bookings, cash registers to 0)"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-            <span className="hidden md:inline">Reset Data</span>
-          </button>
-        )}
 
         {!isSuperAdmin && (
 
@@ -335,19 +320,6 @@ export const Header: React.FC<HeaderProps> = ({
 
 
 
-            {/* Clear Operational Data */}
-            {(user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN') && (
-              <>
-                <DropdownMenuItem
-                  onClick={() => setIsResetModalOpen(true)}
-                  className="text-rose-600 hover:bg-rose-50 hover:text-rose-700 cursor-pointer font-medium text-xs py-2"
-                >
-                  <RotateCcw className="w-4 h-4 mr-2 text-rose-500" />
-                  <span>Clear Operational Data & Ledgers</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
 
             {/* Logout Button */}
             <DropdownMenuItem
@@ -361,11 +333,6 @@ export const Header: React.FC<HeaderProps> = ({
         </DropdownMenu>
       </div>
 
-      {/* GLOBAL RESET DATA MODAL */}
-      <ResetDataModal
-        isOpen={isResetModalOpen}
-        onClose={() => setIsResetModalOpen(false)}
-      />
     </header>
   );
 };

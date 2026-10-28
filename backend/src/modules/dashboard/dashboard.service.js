@@ -292,7 +292,7 @@ export const accountantDashboard = async (actor, { branchId } = {}) => {
     prisma.invoiceRefund.findMany({ where: { invoice: scope, refundDate: dateOnly(date), byUserId: me }, select: { cashOut: true, method: true } }),
     prisma.expense.aggregate({ where: { ...scope, status: 'POSTED', isReversalRecord: false, paidByUserId: me }, _sum: { amount: true } }),
     prisma.settlement.findMany({ where: { ...scope, submittedByUserId: me }, orderBy: { createdAt: 'desc' } }),
-    prisma.invoice.aggregate({ where: { ...scope, lifecycle: { not: 'VOIDED' }, status: { in: ['UNPAID', 'PARTIAL'] } }, _sum: { amountDue: true }, _count: true }),
+    prisma.invoice.aggregate({ where: { ...scope, processedByUserId: me, lifecycle: { not: 'VOIDED' }, status: { in: ['UNPAID', 'PARTIAL'] } }, _sum: { amountDue: true }, _count: true }),
     recentInvoices({ ...scope, processedByUserId: me }),
     prisma.expense.findMany({ where: { ...scope, paidByUserId: me }, orderBy: [{ expenseDate: 'desc' }, { createdAt: 'desc' }], take: 5 }),
   ]);

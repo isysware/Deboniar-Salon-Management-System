@@ -1,6 +1,6 @@
 // src/modules/inventory/inventory.routes.js
-// Permissions follow the mock: staff have no inventory access; accountants can view stock,
-// manage suppliers and pay them; item master, purchases, returns, stock-out and counts are admin-only.
+// Sales users can read the POS catalog and available stock. Business-wide inventory
+// financial history, supplier management and stock mutations are admin-only.
 
 import { Router } from 'express';
 import { authenticate } from '../../middleware/authenticate.js';
@@ -23,15 +23,15 @@ inventoryRoutes.post('/items',              authorize(...ADMINS), validate(v.cre
 inventoryRoutes.put('/items/:id',           authorize(...ADMINS), validate(v.updateItemSchema), c.updateItem);
 inventoryRoutes.post('/items/:id/archive',  authorize(...ADMINS), validate(v.archiveSchema), c.archiveItem);
 inventoryRoutes.get('/stock-levels',        validate(v.branchQuery, 'query'), c.stockLevels);
-inventoryRoutes.get('/summary',             validate(v.branchQuery, 'query'), c.summary);
-inventoryRoutes.get('/cogs-report',         validate(v.cogsQuery, 'query'), c.cogs);
+inventoryRoutes.get('/summary',             authorize(...ADMINS), validate(v.branchQuery, 'query'), c.summary);
+inventoryRoutes.get('/cogs-report',         authorize(...ADMINS), validate(v.cogsQuery, 'query'), c.cogs);
 inventoryRoutes.get('/batches',             validate(v.batchesQuery, 'query'), c.listBatches);
 inventoryRoutes.post('/batches/:id/quarantine', authorize(...ADMINS), validate(v.quarantineSchema), c.quarantine);
 inventoryRoutes.post('/batches/:id/release',    authorize(...ADMINS), c.release);
 
 // ── /suppliers ───────────────────────────────────────────────────────────────
 export const supplierRoutes = Router();
-supplierRoutes.use(authenticate, authorize(...BACK_OFFICE));
+supplierRoutes.use(authenticate, authorize(...ADMINS));
 supplierRoutes.get('/',              validate(v.suppliersQuery, 'query'), c.listSuppliers);
 supplierRoutes.get('/:id',           c.getSupplier);
 supplierRoutes.get('/:id/ledger',    validate(v.ledgerQuery, 'query'), c.ledger);
@@ -43,18 +43,18 @@ supplierRoutes.post('/:id/payments', idempotency, validate(v.paySupplierSchema),
 
 // ── /purchases, /supplier-returns, /stock-movements, /stock-settlements ──────
 export const purchaseRoutes = Router();
-purchaseRoutes.use(authenticate, authorize(...BACK_OFFICE));
+purchaseRoutes.use(authenticate, authorize(...ADMINS));
 purchaseRoutes.get('/',    validate(v.purchasesQuery, 'query'), c.listPurchases);
 purchaseRoutes.get('/:id', c.getPurchase);
 purchaseRoutes.post('/',   authorize(...ADMINS), idempotency, validate(v.createPurchaseSchema), c.createPurchase);
 
 export const supplierReturnRoutes = Router();
-supplierReturnRoutes.use(authenticate, authorize(...BACK_OFFICE));
+supplierReturnRoutes.use(authenticate, authorize(...ADMINS));
 supplierReturnRoutes.get('/',  validate(v.branchQuery, 'query'), c.listReturns);
 supplierReturnRoutes.post('/', authorize(...ADMINS), idempotency, validate(v.createReturnSchema), c.createReturn);
 
 export const stockMovementRoutes = Router();
-stockMovementRoutes.use(authenticate, authorize(...BACK_OFFICE));
+stockMovementRoutes.use(authenticate, authorize(...ADMINS));
 stockMovementRoutes.get('/',            validate(v.movementsQuery, 'query'), c.listMovements);
 stockMovementRoutes.post('/manual-out', authorize(...ADMINS), idempotency, validate(v.stockOutSchema), c.stockOut);
 

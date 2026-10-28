@@ -23,6 +23,7 @@ serviceRoutes.get('/:id',         c.getService);
 serviceRoutes.post('/',           authorize(...ADMINS), validate(v.createServiceSchema), c.createService);
 serviceRoutes.put('/:id',         authorize(...ADMINS), validate(v.updateServiceSchema), c.updateService);
 serviceRoutes.post('/:id/toggle', authorize(...ADMINS), c.toggleService);
+serviceRoutes.delete('/:id',      authorize(...ADMINS), c.deleteService);
 
 export const packageRoutes = Router();
 packageRoutes.use(authenticate);
@@ -32,3 +33,4 @@ packageRoutes.get('/:id',         c.getPackage);
 packageRoutes.post('/',           authorize(...ADMINS), validate(v.createPackageSchema), c.createPackage);
 packageRoutes.put('/:id',         authorize(...ADMINS), validate(v.updatePackageSchema), c.updatePackage);
 packageRoutes.post('/:id/toggle', authorize(...ADMINS), c.togglePackage);
+packageRoutes.delete('/:id',      authorize(...ADMINS), c.deletePackage);

@@ -259,9 +259,18 @@ export const accountStatement = async (actor, accountId, { from, to } = {}) => {
   const branchId = actor.role === 'SUPER_ADMIN' ? null : actor.branchId;
   if (branchId && account.branchId !== branchId && !account.branches.some((b) => b.id === branchId)) throw forbidden('BRANCH_FORBIDDEN', 'Cannot access another branch account.');
 
-  const opening = from ? await accountBalance(accountId, { asOf: from, ...(branchId ? { branchIds: [branchId] } : {}) }) : toDec(!branchId || branchId === account.branchId ? account.openingBalance : 0);
+  const personalScope = actor.role === 'ACCOUNTANT' ? { userId: actor.id } : {};
+  let opening;
+  if (actor.role === 'ACCOUNTANT') {
+    const prior = from ? await prisma.accountMovement.groupBy({
+      by: ['direction'], where: { accountId, branchId, ...personalScope, createdAt: { lt: from } }, _sum: { amount: true },
+    }) : [];
+    opening = prior.reduce((sum, row) => row.direction === 'IN' ? sum.plus(row._sum.amount ?? 0) : sum.minus(row._sum.amount ?? 0), toDec(0));
+  } else {
+    opening = from ? await accountBalance(accountId, { asOf: from, ...(branchId ? { branchIds: [branchId] } : {}) }) : toDec(!branchId || branchId === account.branchId ? account.openingBalance : 0);
+  }
   const movements = await prisma.accountMovement.findMany({
-    where: { accountId, ...(branchId ? { branchId } : {}), ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) },
+    where: { accountId, ...personalScope, ...(branchId ? { branchId } : {}), ...(from || to ? { createdAt: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}) },
     orderBy: { createdAt: 'asc' },
   });
   let running = opening;

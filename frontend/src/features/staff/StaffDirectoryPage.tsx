@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { salonService } from '@/services';
+import { saveStaffEdit } from './saveStaffEdit';
 import { toast } from '@/context/ToastContext';
 import {
   StaffMember,
@@ -462,7 +463,7 @@ export const StaffDirectoryPage: React.FC = () => {
       specialties: (staff.specialties || []).join(', '),
       enablePortalAccess: !!staff.hasPortalAccess,
       portalIdentifier: staff.linkedUserEmail || staff.email || '',
-      portalPassword: '',
+      portalPassword: staff.linkedUserId ? '' : 'Staff@2026',
     });
     setFormError(null);
     setFormSuccess(null);
@@ -639,8 +640,9 @@ export const StaffDirectoryPage: React.FC = () => {
         .map((s) => s.trim())
         .filter(Boolean);
 
-      await salonService.updateStaffMember(
-        selectedStaff.id,
+      const updatedStaff = await saveStaffEdit(
+        salonService,
+        selectedStaff,
         {
           name: formData.name.trim(),
           phone: formData.phone.trim(),
@@ -679,8 +681,14 @@ export const StaffDirectoryPage: React.FC = () => {
           specialties: specialtiesArray,
           isActive: formData.isActive,
         },
+        {
+          enable: formData.enablePortalAccess,
+          identifier: formData.portalIdentifier,
+          password: formData.portalPassword,
+        },
         user
       );
+      setSelectedStaff(updatedStaff);
 
       const successMsg = `Employee details for '${formData.name}' updated successfully.`;
       setFormSuccess(successMsg);
@@ -693,6 +701,7 @@ export const StaffDirectoryPage: React.FC = () => {
       const errorMsg = err.message || 'Failed to update employee profile.';
       setFormError(errorMsg);
       toast.error(errorMsg);
+      await loadData();
     } finally {
       setIsSubmitting(false);
     }
@@ -1062,6 +1071,13 @@ export const StaffDirectoryPage: React.FC = () => {
             </DialogHeader>
 
             <form onSubmit={isAddModalOpen ? handleCreateStaffSubmit : handleEditStaffSubmit} className="space-y-6 py-2">
+              {formError && (
+                <Alert variant="destructive" role="alert">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Could not save all changes</AlertTitle>
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
+              )}
               {/* SECTION 1: BASIC INFORMATION */}
               <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-3.5">
                 <div className="flex items-center gap-2 text-slate-800 font-semibold text-xs uppercase tracking-wider border-b border-slate-200 pb-2">
@@ -1534,11 +1550,12 @@ export const StaffDirectoryPage: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, portalIdentifier: e.target.value })}
                       />
 
-                      {isAddModalOpen && (
+                      {(isAddModalOpen || !selectedStaff?.linkedUserId) && (
                         <Input
                           label="Initial Password *"
                           type="text"
                           required
+                          minLength={6}
                           placeholder="Staff@2026"
                           value={formData.portalPassword}
                           onChange={(e) => setFormData({ ...formData, portalPassword: e.target.value })}
@@ -1645,6 +1662,13 @@ export const StaffDirectoryPage: React.FC = () => {
             </DialogHeader>
 
             <form onSubmit={handlePortalSubmit} className="space-y-3 py-2">
+              {formError && (
+                <Alert variant="destructive" role="alert">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Portal access was not updated</AlertTitle>
+                  <AlertDescription>{formError}</AlertDescription>
+                </Alert>
+              )}
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="portal-enable-dialog-switch"

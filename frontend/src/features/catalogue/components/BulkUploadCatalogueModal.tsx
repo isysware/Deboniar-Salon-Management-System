@@ -83,10 +83,46 @@ interface ParsedPackageRow {
   error?: string;
 }
 
+function cleanCell(val: string): string {
+  let s = (val || '').trim();
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim();
+  }
+  return s.replace(/""/g, '"');
+}
+
 /**
- * Robust CSV line tokenizer respecting quoted strings with commas and escaped quotes.
+ * Auto-detects delimiter: Tab (\t) for Excel paste/TSV, Semicolon (;) for European/regional Excel, or Comma (,)
  */
-function parseCSVLine(line: string): string[] {
+function detectDelimiter(lines: string[]): string {
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    let inQuotes = false;
+    let tabs = 0;
+    let commas = 0;
+    let semicolons = 0;
+
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') inQuotes = !inQuotes;
+      else if (!inQuotes) {
+        if (ch === '\t') tabs++;
+        else if (ch === ',') commas++;
+        else if (ch === ';') semicolons++;
+      }
+    }
+
+    if (tabs > 0 && tabs >= commas) return '\t';
+    if (semicolons > 0 && semicolons >= commas) return ';';
+    if (commas > 0) return ',';
+  }
+  return ',';
+}
+
+/**
+ * Robust CSV/TSV line tokenizer respecting quoted strings with commas and escaped quotes.
+ */
+function parseCSVLine(line: string, delimiter: string = ','): string[] {
   const values: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -100,14 +136,14 @@ function parseCSVLine(line: string): string[] {
       } else {
         inQuotes = !inQuotes;
       }
-    } else if (char === ',' && !inQuotes) {
-      values.push(current.trim());
+    } else if (char === delimiter && !inQuotes) {
+      values.push(cleanCell(current));
       current = '';
     } else {
       current += char;
     }
   }
-  values.push(current.trim());
+  values.push(cleanCell(current));
   return values;
 }
 
@@ -116,7 +152,9 @@ function parseCSVText(text: string): string[][] {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
-  return lines.map(parseCSVLine);
+  if (lines.length === 0) return [];
+  const delimiter = detectDelimiter(lines);
+  return lines.map((l) => parseCSVLine(l, delimiter));
 }
 
 const loadImportBranch = async (branchId: string) => {
@@ -170,72 +208,34 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
 
   // ── CSV Export / Templates ────────────────────────────────────────────────
   const downloadServicesTemplate = () => {
-    const branchServices = existingServices.filter((s) => !branchId || s.branchId === branchId);
-    const targetServices = branchServices.length > 0 ? branchServices : existingServices;
-
-    const headers = ['Name', 'Category', 'Price', 'Duration', 'Code', 'Description', 'TaxTreatment', 'Status'];
-    let rows: string[][] = [];
-
-    if (targetServices.length > 0) {
-      rows = targetServices.map((s) => [
-        s.name,
-        s.category || 'General',
-        String(s.price),
-        String(s.durationMinutes),
-        s.code || '',
-        s.description || '',
-        s.taxTreatment || 'BRANCH_DEFAULT',
-        s.isActive ? 'Active' : 'Inactive',
-      ]);
-    } else {
-      rows = [
-        ['Hair Cut & Style', 'Hair Services', '1500', '45', 'HAIR-01', 'Standard hair cut and styling', 'BRANCH_DEFAULT', 'Active'],
-        ['Beard Grooming', 'Grooming', '800', '30', 'GRM-01', 'Beard trim and shape up', 'BRANCH_DEFAULT', 'Active'],
-      ];
-    }
+    const headers = ['Name', 'Category', 'Price'];
+    const rows = [
+      ['Hair Cut', 'Hair', '3500'],
+      ['Beard Grooming', 'Grooming', '800'],
+      ['Signature Facial', 'Skin', '5000'],
+    ];
 
     const csvContent = '\uFEFF' + [
       headers.map(escapeCell).join(','),
       ...rows.map((r) => r.map(escapeCell).join(',')),
     ].join('\n');
 
-    downloadFile(csvContent, targetServices.length > 0 ? 'services_catalogue_export.csv' : 'services_bulk_import_template.csv');
+    downloadFile(csvContent, 'services_bulk_import_template.csv');
   };
 
   const downloadPackagesTemplate = () => {
-    const branchPackages = existingPackages.filter((p) => !branchId || p.branchId === branchId);
-    const targetPackages = branchPackages.length > 0 ? branchPackages : existingPackages;
-
-    const headers = ['Name', 'Price', 'Components', 'Code', 'Description', 'TaxTreatment', 'Status'];
-    let rows: string[][] = [];
-
-    if (targetPackages.length > 0) {
-      rows = targetPackages.map((p) => {
-        const comps = (p.components || [])
-          .map((c) => `${c.serviceName}:${c.quantity || 1}:${c.allocationPercentage || 0}`)
-          .join(';');
-        return [
-          p.name,
-          String(p.price),
-          comps,
-          p.code || '',
-          p.description || '',
-          p.taxTreatment || 'BRANCH_DEFAULT',
-          p.isActive ? 'Active' : 'Inactive',
-        ];
-      });
-    } else {
-      rows = [
-        ['Bridal Glow', '12000', 'Hydra Facial:1:50;Classic Manicure:1:50', 'PKG-01', 'Complete bridal pamper package', 'BRANCH_DEFAULT', 'Active'],
-      ];
-    }
+    const headers = ['Package Name', 'Price', 'Services'];
+    const rows = [
+      ['Groom Special', '4000', 'Hair Cut, Beard Grooming'],
+      ['Bridal Glow', '15000', 'Hydra Facial, Classic Manicure'],
+    ];
 
     const csvContent = '\uFEFF' + [
       headers.map(escapeCell).join(','),
       ...rows.map((r) => r.map(escapeCell).join(',')),
     ].join('\n');
 
-    downloadFile(csvContent, targetPackages.length > 0 ? 'packages_catalogue_export.csv' : 'packages_bulk_import_template.csv');
+    downloadFile(csvContent, 'packages_bulk_import_template.csv');
   };
 
   const downloadFile = (content: string, filename: string) => {
@@ -286,7 +286,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
     if (type === 'SERVICES') {
       const nameIdx = header.findIndex((h) => h.includes('name') || h === 'service');
       const catIdx = header.findIndex((h) => h.includes('cat'));
-      const priceIdx = header.findIndex((h) => h.includes('price') || h.includes('rate') || h.includes('cost'));
+      const priceIdx = header.findIndex((h) => h.includes('price') || h.includes('rate') || h.includes('cost') || h.includes('amount') || h.includes('pkr'));
       const durationIdx = header.findIndex((h) => h.includes('dur') || h.includes('min') || h.includes('time'));
       const codeIdx = header.findIndex((h) => h.includes('code') || h === 'id');
       const descIdx = header.findIndex((h) => h.includes('desc'));
@@ -303,13 +303,14 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
       const parsed: ParsedServiceRow[] = rows.map((cols, idx) => {
         const rowNum = idx + 2;
         const name = (nameIdx >= 0 ? cols[nameIdx] : cols[0]) || '';
-        const category = (catIdx >= 0 ? cols[catIdx] : 'General') || 'General';
-        const rawPrice = priceIdx >= 0 ? cols[priceIdx] : cols[1];
-        const price = Number(rawPrice);
+        const category = (catIdx >= 0 ? cols[catIdx] : (cols[1] || 'General')) || 'General';
+        const rawPrice = (priceIdx >= 0 ? cols[priceIdx] : cols[2]) || '';
+        const cleanedPrice = String(rawPrice).replace(/[^0-9.]/g, '');
+        const price = cleanedPrice !== '' ? Number(cleanedPrice) : NaN;
         const rawDur = durationIdx >= 0 ? cols[durationIdx] : '30';
         const duration = Number(rawDur) || 30;
-        const code = (codeIdx >= 0 ? cols[codeIdx] : '')?.toUpperCase() || undefined;
-        const description = descIdx >= 0 ? cols[descIdx] : '';
+        const code = (codeIdx >= 0 && cols[codeIdx] ? cols[codeIdx] : '')?.toUpperCase() || undefined;
+        const description = descIdx >= 0 && cols[descIdx] ? cols[descIdx].trim() : '';
         const rawTax = (taxIdx >= 0 ? cols[taxIdx] : '')?.toUpperCase();
         const taxTreatment: 'BRANCH_DEFAULT' | 'SPECIFIC_RULE' | 'EXEMPT' =
           rawTax === 'EXEMPT' ? 'EXEMPT' : rawTax === 'SPECIFIC_RULE' ? 'SPECIFIC_RULE' : 'BRANCH_DEFAULT';
@@ -322,7 +323,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
         if (!name.trim()) {
           isValid = false;
           error = 'Service name is missing.';
-        } else if (isNaN(price) || price < 0) {
+        } else if (isNaN(price) || price < 0 || cleanedPrice === '') {
           isValid = false;
           error = 'Price must be a valid non-negative number.';
         } else if (code) {
@@ -340,11 +341,11 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
         return {
           rowNumber: rowNum,
           name: name.trim(),
-          category: category.trim(),
+          category: category.trim() || 'General',
           price: isNaN(price) ? 0 : price,
           durationMinutes: duration,
           code,
-          description: description?.trim(),
+          description,
           taxTreatment,
           isActive,
           isValid,
@@ -355,9 +356,9 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
       setParsedServices(parsed);
     } else {
       // PACKAGES
-      const nameIdx = header.findIndex((h) => h.includes('name') || h === 'package');
-      const priceIdx = header.findIndex((h) => h.includes('price') || h.includes('rate') || h.includes('cost'));
-      const compIdx = header.findIndex((h) => h.includes('comp') || h.includes('service') || h.includes('item'));
+      const nameIdx = header.findIndex((h) => h.includes('name') || h === 'package' || h.includes('pack'));
+      const priceIdx = header.findIndex((h) => h.includes('price') || h.includes('rate') || h.includes('cost') || h.includes('amount') || h.includes('pkr'));
+      const compIdx = header.findIndex((h) => h.includes('serv') || h.includes('comp') || h.includes('item'));
       const codeIdx = header.findIndex((h) => h.includes('code') || h === 'id');
       const descIdx = header.findIndex((h) => h.includes('desc'));
       const taxIdx = header.findIndex((h) => h.includes('tax'));
@@ -368,17 +369,28 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
           .filter((p) => p.branchId === branchId)
           .map((p) => p.code.toUpperCase())
       );
-      const branchServices = existingServices.filter((s) => s.branchId === branchId);
+      const branchServices = existingServices.filter((s) => !branchId || branchId === 'ALL' || s.branchId === branchId);
+      const availableServices = branchServices.length > 0 ? branchServices : existingServices;
       const seenCodesInBatch = new Set<string>();
 
       const parsed: ParsedPackageRow[] = rows.map((cols, idx) => {
         const rowNum = idx + 2;
         const name = (nameIdx >= 0 ? cols[nameIdx] : cols[0]) || '';
-        const rawPrice = priceIdx >= 0 ? cols[priceIdx] : cols[1];
-        const price = Number(rawPrice);
-        const rawComps = (compIdx >= 0 ? cols[compIdx] : cols[2]) || '';
-        const code = (codeIdx >= 0 ? cols[codeIdx] : '')?.toUpperCase() || undefined;
-        const description = descIdx >= 0 ? cols[descIdx] : '';
+        const rawPrice = (priceIdx >= 0 ? cols[priceIdx] : cols[1]) || '';
+        const cleanedPrice = String(rawPrice).replace(/[^0-9.]/g, '');
+        const price = cleanedPrice !== '' ? Number(cleanedPrice) : NaN;
+        
+        let rawComps = '';
+        if (compIdx >= 0) {
+          rawComps = cols.slice(compIdx).join(', ');
+        } else if (cols.length > 2) {
+          rawComps = cols.slice(2).join(', ');
+        } else {
+          rawComps = cols[2] || '';
+        }
+
+        const code = (codeIdx >= 0 && cols[codeIdx] ? cols[codeIdx] : '')?.toUpperCase() || undefined;
+        const description = descIdx >= 0 && cols[descIdx] ? cols[descIdx].trim() : '';
         const rawTax = (taxIdx >= 0 ? cols[taxIdx] : '')?.toUpperCase();
         const taxTreatment: 'BRANCH_DEFAULT' | 'SPECIFIC_RULE' | 'EXEMPT' =
           rawTax === 'EXEMPT' ? 'EXEMPT' : rawTax === 'SPECIFIC_RULE' ? 'SPECIFIC_RULE' : 'BRANCH_DEFAULT';
@@ -391,7 +403,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
         if (!name.trim()) {
           isValid = false;
           error = 'Package name is missing.';
-        } else if (isNaN(price) || price < 0) {
+        } else if (isNaN(price) || price < 0 || cleanedPrice === '') {
           isValid = false;
           error = 'Price must be a valid non-negative number.';
         } else if (code) {
@@ -406,17 +418,17 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
           }
         }
 
-        // Parse components: format "Service1:Qty:Alloc; Service2:Qty:Alloc" or "Service1; Service2"
+        // Parse components: format "Service 1, Service 2" or "Service 1; Service 2" or "Service1:Qty:Alloc"
         const componentTokens = rawComps
-          .split(';')
-          .map((c) => c.trim())
+          .split(/[,;+]/)
+          .map((c) => c.trim().replace(/^["']|["']$/g, ''))
           .filter(Boolean);
 
         const components: ParsedPackageComponent[] = [];
 
         if (componentTokens.length === 0 && isValid) {
           isValid = false;
-          error = 'No component services specified (Components column is empty).';
+          error = 'No services specified for this package.';
         } else {
           for (const token of componentTokens) {
             const parts = token.split(':').map((p) => p.trim());
@@ -424,20 +436,21 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
             const qty = parts[1] ? parseInt(parts[1], 10) || 1 : 1;
             const alloc = parts[2] ? parseFloat(parts[2]) : undefined;
 
-            // Match against branch services by code or name or id
-            const matched = branchServices.find(
+            // Match against available services by code or name or id
+            const cleanId = identifier.trim().toLowerCase();
+            const matched = availableServices.find(
               (s) =>
-                s.code.toUpperCase() === identifier.toUpperCase() ||
-                s.name.toLowerCase() === identifier.toLowerCase() ||
-                s.id === identifier
+                s.name.trim().toLowerCase() === cleanId ||
+                s.code.trim().toUpperCase() === identifier.trim().toUpperCase() ||
+                s.id === identifier.trim()
             );
 
             if (!matched && isValid) {
               isValid = false;
-              error = `Component service '${identifier}' not found in branch services.`;
+              error = `Service '${identifier}' not found in active catalogue.`;
             } else if (matched && !matched.isActive && isValid) {
               isValid = false;
-              error = `Component service '${matched.name}' is deactivated.`;
+              error = `Service '${matched.name}' is deactivated.`;
             }
 
             components.push({
@@ -454,7 +467,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
           name: name.trim(),
           price: isNaN(price) ? 0 : price,
           code,
-          description: description?.trim(),
+          description,
           taxTreatment,
           isActive,
           components,
@@ -644,10 +657,12 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[11px] font-medium text-slate-600">
-                  Or Paste CSV Content Directly:
+                  {activeTab === 'SERVICES'
+                    ? 'Paste CSV Content (Columns: Name, Category, Price):'
+                    : 'Paste CSV Content (Columns: Package Name, Price, Services):'}
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  First row must contain header names
+                  Code: Auto-generated | Tax: Branch Default | Status: Active
                 </span>
               </div>
               <textarea
@@ -655,8 +670,8 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
                 onChange={handleTextChange}
                 placeholder={
                   activeTab === 'SERVICES'
-                    ? `Name,Category,Price,Duration,Code,Description\nHair Cut & Style,Hair Services,1500,45,HAIR-01,Standard hair cut\nBeard Grooming,Grooming,800,30,GRM-01,Trim and shape`
-                    : `Name,Price,Components,Code,Description\n"Bridal Glow",12000,"Hydra Facial;Classic Manicure;Hair Cut & Style",PKG-01,"Complete package"\n"Groom Special",4500,"Hair Cut & Style:1:60;Beard Grooming:1:40",PKG-02,"Hair and beard"`
+                    ? `Name,Category,Price\nHair Cut,Hair,3500\nBeard Grooming,Grooming,800\nSignature Facial,Skin,5000`
+                    : `Package Name,Price,Services\nGroom Special,4000,"Hair Cut, Beard Grooming"\nBridal Glow,15000,"Hydra Facial, Classic Manicure"`
                 }
                 rows={5}
                 className="w-full font-mono text-xs p-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2254E1]/20 focus:border-[#2254E1] transition-all bg-slate-50/50"
@@ -695,17 +710,20 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
                   <TableHeader className="bg-slate-50 sticky top-0 z-10">
                     <TableRow className="text-[11px]">
                       <TableHead className="w-10">#</TableHead>
-                      <TableHead>Name</TableHead>
+                      <TableHead>{activeTab === 'SERVICES' ? 'Service Name' : 'Package Name'}</TableHead>
                       {activeTab === 'SERVICES' ? (
                         <>
                           <TableHead>Category</TableHead>
-                          <TableHead>Duration</TableHead>
+                          <TableHead>Price (PKR)</TableHead>
+                          <TableHead>Service Code</TableHead>
                         </>
                       ) : (
-                        <TableHead>Component Services</TableHead>
+                        <>
+                          <TableHead>Included Services</TableHead>
+                          <TableHead>Price (PKR)</TableHead>
+                          <TableHead>Package Code</TableHead>
+                        </>
                       )}
-                      <TableHead>Price</TableHead>
-                      <TableHead>Code</TableHead>
                       <TableHead className="text-right">Status</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -727,12 +745,17 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
                                 {row.category}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-slate-600">{row.durationMinutes}m</TableCell>
                             <TableCell className="font-semibold text-slate-900">
                               {formatCurrency(row.price)}
                             </TableCell>
-                            <TableCell className="font-mono text-[11px] text-slate-500">
-                              {row.code || <span className="text-slate-400 italic">Auto</span>}
+                            <TableCell>
+                              {row.code ? (
+                                <span className="font-mono text-[11px] text-slate-600">{row.code}</span>
+                              ) : (
+                                <span className="inline-flex items-center text-[10px] font-mono font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                  Auto-generated
+                                </span>
+                              )}
                             </TableCell>
                             <TableCell className="text-right">
                               {row.isValid ? (
@@ -765,7 +788,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
                                   <Badge
                                     key={i}
                                     variant={c.matchedService ? 'neutral' : 'destructive'}
-                                    className="text-[9px] font-normal"
+                                    className="text-[10px] font-normal"
                                   >
                                     {c.matchedService?.name || c.serviceIdentifier}
                                     {c.quantity > 1 ? ` (x${c.quantity})` : ''}
@@ -776,8 +799,14 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
                             <TableCell className="font-semibold text-slate-900">
                               {formatCurrency(row.price)}
                             </TableCell>
-                            <TableCell className="font-mono text-[11px] text-slate-500">
-                              {row.code || <span className="text-slate-400 italic">Auto</span>}
+                            <TableCell>
+                              {row.code ? (
+                                <span className="font-mono text-[11px] text-slate-600">{row.code}</span>
+                              ) : (
+                                <span className="inline-flex items-center text-[10px] font-mono font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                                  Auto-generated
+                                </span>
+                              )}
                             </TableCell>
                             <TableCell className="text-right">
                               {row.isValid ? (

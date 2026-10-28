@@ -1474,6 +1474,7 @@ const computePeriodMetrics = async (branchId, fromStr, toStr, fromDate, toDate) 
 };
 
 export const operatingProfitReport = async (actor, query = {}) => {
+  denyNonAdmins(actor, 'business-wide financial reports');
   const ctx = await resolveReportContext(actor, query, 'RECOGNITION');
   const prior = resolvePriorPeriodDates(ctx.fromStr, ctx.toStr);
 
@@ -1698,7 +1699,7 @@ export const operatingProfitReport = async (actor, query = {}) => {
 
 export const paymentAccountsReport = async (actor, query = {}) => {
   const ctx = await resolveReportContext(actor, query, 'MOVEMENT_TIMESTAMP');
-  const branchFilter = ctx.branchId ? { branchId: ctx.branchId } : {};
+  const branchFilter = { ...(ctx.branchId ? { branchId: ctx.branchId } : {}), ...(actor.role === 'ACCOUNTANT' ? { userId: actor.id } : {}) };
 
   // 1. Fetch matching payment accounts
   const accountWhere = {
@@ -1759,7 +1760,7 @@ export const paymentAccountsReport = async (actor, query = {}) => {
   for (const a of accounts) {
     const inBefore = preMovementsSums.find((s) => s.accountId === a.id && s.direction === 'IN')?._sum.amount ?? 0;
     const outBefore = preMovementsSums.find((s) => s.accountId === a.id && s.direction === 'OUT')?._sum.amount ?? 0;
-    const opening = toDec(!ctx.branchId || a.branchId === ctx.branchId ? a.openingBalance : 0).plus(toDec(inBefore)).minus(toDec(outBefore));
+    const opening = toDec(actor.role !== 'ACCOUNTANT' && (!ctx.branchId || a.branchId === ctx.branchId) ? a.openingBalance : 0).plus(toDec(inBefore)).minus(toDec(outBefore));
     openingBalanceMap.set(a.id, opening);
   }
 
@@ -2498,6 +2499,7 @@ export const detailedExpensesReport = async (actor, query = {}) => {
 
 // ═══ INVENTORY & SUPPLY CHAIN REPORTS SUITE ══════════════════════════════════
 export const inventoryReport = async (actor, query = {}) => {
+  denyNonAdmins(actor, 'business-wide financial reports');
   if (actor.role === 'STAFF') {
     throw forbidden('FORBIDDEN', 'Access Denied: Staff members cannot access inventory reports.');
   }
