@@ -181,7 +181,16 @@ export const superAdminDashboard = async (actor, { branchId = 'ALL' } = {}) => {
     prisma.cashDrawer.findMany({ where: { ...scope, kind: 'DRAWER' }, orderBy: { createdAt: 'desc' } }),
     prisma.settlement.findMany({ where: { ...scope, status: 'SUBMITTED' } }),
     prisma.client.count({ where: scope }),
-    prisma.service.count({ where: { ...scope, isActive: true } }),
+    prisma.service.count({
+      where: {
+        ...scope,
+        isActive: true,
+        OR: [
+          { description: null },
+          { NOT: { description: { contains: '[PACKAGE_ONLY]' } } },
+        ],
+      },
+    }),
     prisma.appointment.count({ where: scope }),
     prisma.staff.findMany({ where: { ...scope, isActive: true }, select: { id: true, name: true, roleTitle: true } }),
     computeRevenueTrend(scope),
@@ -238,7 +247,16 @@ export const adminDashboard = async (actor, { branchId } = {}) => {
     prisma.paymentAccount.findMany({ where: { OR: [scope, { branches: { some: { id: scope.branchId } } }] }, orderBy: { createdAt: 'asc' } }),
     prisma.cashDrawer.findMany({ where: { ...scope, kind: 'DRAWER' }, orderBy: { createdAt: 'desc' } }),
     prisma.client.count({ where: scope }),
-    prisma.service.count({ where: { ...scope, isActive: true } }),
+    prisma.service.count({
+      where: {
+        ...scope,
+        isActive: true,
+        OR: [
+          { description: null },
+          { NOT: { description: { contains: '[PACKAGE_ONLY]' } } },
+        ],
+      },
+    }),
     prisma.appointment.count({ where: scope }),
     prisma.staff.findMany({ where: { ...scope, isActive: true }, select: { id: true, name: true, roleTitle: true } }),
     computeRevenueTrend(scope),

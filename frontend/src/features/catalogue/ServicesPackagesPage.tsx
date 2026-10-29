@@ -255,6 +255,9 @@ export const ServicesPackagesPage: React.FC = () => {
 
   useEffect(() => {
     loadBranchCatalogue();
+    setCategoryFilter('ALL');
+    setStatusFilter('ALL');
+    setSearchQuery('');
   }, [selectedBranchId]);
 
   // Keep branch in sync if activeBranchId changes for Super Admin or when branches load

@@ -70,9 +70,10 @@ export const listServices = async (actor, branchId) => {
   const services = await prisma.service.findMany({
     where: {
       ...(b ? { branchId: b } : {}),
-      NOT: {
-        description: { contains: '[PACKAGE_ONLY]' },
-      },
+      OR: [
+        { description: null },
+        { NOT: { description: { contains: '[PACKAGE_ONLY]' } } },
+      ],
     },
     include: serviceInclude,
     orderBy: { code: 'asc' },
