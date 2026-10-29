@@ -1,6 +1,6 @@
 import { BranchActionField } from '@/components/BranchActionField';
 import { useBranchAction } from '@/hooks/useBranchAction';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { salonService } from '@/services';
 import { toast } from '@/context/ToastContext';
@@ -181,6 +181,18 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
   const [fileName, setFileName] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync tab with initialType when modal opens or initialType changes
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialType);
+      setRawText('');
+      setFileName(null);
+      setParsedServices([]);
+      setParsedPackages([]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [isOpen, initialType]);
 
   // Parsed state
   const [parsedServices, setParsedServices] = useState<ParsedServiceRow[]>([]);
@@ -445,10 +457,7 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
                 s.id === identifier.trim()
             );
 
-            if (!matched && isValid) {
-              isValid = false;
-              error = `Service '${identifier}' not found in active catalogue.`;
-            } else if (matched && !matched.isActive && isValid) {
+            if (matched && !matched.isActive && isValid) {
               isValid = false;
               error = `Service '${matched.name}' is deactivated.`;
             }
@@ -532,8 +541,8 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
           isActive: r.isActive,
           components: r.components.map((c) => ({
             serviceId: c.matchedService?.id,
-            serviceCode: c.matchedService?.code || c.serviceIdentifier,
-            serviceName: c.matchedService?.name,
+            serviceCode: c.matchedService?.code,
+            serviceName: c.matchedService?.name || c.serviceIdentifier,
             quantity: c.quantity,
             allocationPercentage: c.allocationPercentage,
           })),
@@ -570,10 +579,12 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
             </div>
             <div>
               <DialogTitle className="text-lg font-semibold text-slate-900">
-                Bulk Upload via CSV
+                {activeTab === 'SERVICES' ? 'Bulk Upload Standalone Services' : 'Bulk Upload Bundled Packages'}
               </DialogTitle>
               <DialogDescription className="text-xs text-slate-500">
-                Upload or paste comma-separated records to add multiple standalone services or package bundles at once.
+                {activeTab === 'SERVICES'
+                  ? 'Upload or paste comma-separated records to add multiple standalone services to this branch catalogue.'
+                  : 'Upload or paste comma-separated records to create package bundles from your existing catalogue services without creating standalone services.'}
               </DialogDescription>
             </div>
           </div>
@@ -662,7 +673,9 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
                     : 'Paste CSV Content (Columns: Package Name, Price, Services):'}
                 </span>
                 <span className="text-[11px] text-slate-400">
-                  Code: Auto-generated | Tax: Branch Default | Status: Active
+                  {activeTab === 'SERVICES'
+                    ? 'Code: Auto-generated | Tax: Branch Default | Status: Active'
+                    : 'Packages bundle existing services. Standalone services are NEVER auto-created.'}
                 </span>
               </div>
               <textarea
@@ -787,10 +800,13 @@ export const BulkUploadCatalogueModal: React.FC<BulkUploadCatalogueModalProps> =
                                 {row.components.map((c, i) => (
                                   <Badge
                                     key={i}
-                                    variant={c.matchedService ? 'neutral' : 'destructive'}
-                                    className="text-[10px] font-normal"
+                                    variant={c.matchedService ? 'neutral' : 'outline'}
+                                    className={`text-[10px] font-normal ${!c.matchedService ? 'border-blue-300 text-blue-700 bg-blue-50/60' : ''}`}
                                   >
                                     {c.matchedService?.name || c.serviceIdentifier}
+                                    {!c.matchedService && (
+                                      <span className="ml-1 text-[9px] font-semibold text-blue-600">(Package only)</span>
+                                    )}
                                     {c.quantity > 1 ? ` (x${c.quantity})` : ''}
                                   </Badge>
                                 ))}

@@ -19,6 +19,7 @@ export const toServiceDTO = (s) => ({
   specificTaxRuleId: opt(s.specificTaxRuleId),
   isActive:          s.isActive,
   taxExempt:         s.taxTreatment === 'EXEMPT',
+  isPackageOnly:     Boolean(s.description?.includes('[PACKAGE_ONLY]') || s.code?.startsWith('PKG-')),
 });
 
 /** Package row (with `components.service`) → frontend `PackageItem`. */

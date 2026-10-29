@@ -1894,9 +1894,9 @@ class MockSalonService implements SalonServiceContract {
   async getServices(branchId: string | 'ALL'): Promise<ServiceItem[]> {
     const store = mockStorage.getStore();
     if (branchId === 'ALL') {
-      return [...store.services];
+      return store.services.filter((s) => !s.isPackageOnly);
     }
-    return store.services.filter((s) => s.branchId === branchId);
+    return store.services.filter((s) => s.branchId === branchId && !s.isPackageOnly);
   }
 
   async getService(id: string): Promise<ServiceItem | null> {
@@ -2464,17 +2464,31 @@ class MockSalonService implements SalonServiceContract {
         let compError = null;
 
         for (const c of row.components) {
-          const srv = branchServices.find((s) =>
+          let srv = branchServices.find((s) =>
             (c.serviceId && s.id === c.serviceId) ||
             (c.serviceCode && s.code.toUpperCase() === c.serviceCode.trim().toUpperCase()) ||
             (c.serviceName && s.name.toLowerCase() === c.serviceName.trim().toLowerCase())
           );
 
           if (!srv) {
-            compError = `Component '${c.serviceCode || c.serviceName || c.serviceId}' not found in active branch services.`;
-            break;
-          }
-          if (!srv.isActive) {
+            // Service not in catalogue: create as package-only component
+            const sName = (c.serviceName || c.serviceCode || 'Service').trim();
+            const sCode = nextReference(store, 'SRV');
+            const newSrv: ServiceItem = {
+              id: generateId(),
+              branchId: effectiveBranchId,
+              code: sCode,
+              name: sName,
+              category: 'Package Services',
+              durationMinutes: 30,
+              price: 0,
+              taxTreatment: 'BRANCH_DEFAULT',
+              isActive: true,
+              isPackageOnly: true,
+            };
+            store.services.push(newSrv);
+            srv = newSrv;
+          } else if (!srv.isActive) {
             compError = `Cannot include deactivated service '${srv.name}' in package.`;
             break;
           }

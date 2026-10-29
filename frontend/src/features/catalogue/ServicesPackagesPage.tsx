@@ -278,7 +278,7 @@ export const ServicesPackagesPage: React.FC = () => {
         statusFilter === 'ALL' ||
         (statusFilter === 'ACTIVE' && srv.isActive) ||
         (statusFilter === 'INACTIVE' && !srv.isActive);
-      return matchesSearch && matchesCategory && matchesStatus;
+      return !srv.isPackageOnly && matchesSearch && matchesCategory && matchesStatus;
     });
   }, [services, searchQuery, categoryFilter, statusFilter]);
 

@@ -67,7 +67,16 @@ export const createCategory = async ({ branchId: requested, name }, actor) => {
 
 export const listServices = async (actor, branchId) => {
   const b = resolveReadBranch(actor, branchId);
-  const services = await prisma.service.findMany({ where: b ? { branchId: b } : {}, include: serviceInclude, orderBy: { code: 'asc' } });
+  const services = await prisma.service.findMany({
+    where: {
+      ...(b ? { branchId: b } : {}),
+      NOT: {
+        description: { contains: '[PACKAGE_ONLY]' },
+      },
+    },
+    include: serviceInclude,
+    orderBy: { code: 'asc' },
+  });
   return services.map(toServiceDTO);
 };
 
@@ -416,6 +425,7 @@ export const bulkImportPackages = async ({ branchId: requested, rows }, actor) =
     const serviceById = new Map(branchServices.map((s) => [s.id, s]));
     const serviceByCode = new Map(branchServices.map((s) => [s.code.toUpperCase(), s]));
     const serviceByName = new Map(branchServices.map((s) => [s.name.trim().toLowerCase(), s]));
+    const seenServiceCodes = new Set(branchServices.map((s) => s.code.toUpperCase()));
 
     const existingPkgs = await tx.package.findMany({ where: { branchId } });
     const seenCodes = new Set(existingPkgs.map((p) => p.code.toUpperCase()));
@@ -472,10 +482,33 @@ export const bulkImportPackages = async ({ branchId: requested, rows }, actor) =
           }
 
           if (!srv) {
-            compError = `Component '${c.serviceCode || c.serviceName || c.serviceId}' not found in active branch services.`;
-            break;
-          }
-          if (!srv.isActive) {
+            // Service not found in branch catalogue: create it as package-only component
+            // so that it belongs ONLY to this package and NEVER appears in the standalone services list!
+            const serviceName = (c.serviceName || c.serviceCode || 'Service').trim();
+            const categoryId = await categoryIdFor(tx, branchId, 'Package Services');
+            let nextCode;
+            do {
+              nextCode = await generateNextServiceCode(tx);
+            } while (seenServiceCodes.has(nextCode));
+            seenServiceCodes.add(nextCode);
+
+            srv = await tx.service.create({
+              data: {
+                branchId,
+                categoryId,
+                code: nextCode,
+                name: serviceName,
+                description: '[PACKAGE_ONLY]',
+                durationMinutes: 30,
+                price: round2(0),
+                taxTreatment: 'BRANCH_DEFAULT',
+                isActive: true,
+              },
+            });
+            serviceById.set(srv.id, srv);
+            serviceByName.set(srv.name.trim().toLowerCase(), srv);
+            serviceByCode.set(srv.code.toUpperCase(), srv);
+          } else if (!srv.isActive) {
             compError = `Cannot include deactivated service '${srv.name}' in package.`;
             break;
           }

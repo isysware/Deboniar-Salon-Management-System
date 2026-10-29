@@ -183,6 +183,7 @@ export interface ServiceItem {
   specificTaxRuleId?: string;
   isActive: boolean;
   taxExempt?: boolean;
+  isPackageOnly?: boolean;
 }
 
 export interface PackageComponent {
