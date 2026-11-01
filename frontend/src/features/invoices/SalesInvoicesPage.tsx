@@ -10,6 +10,7 @@ import {
 } from '@/types/salon';
 import { AccessDeniedView } from '@/features/scaffold/AccessDeniedView';
 import { ReceiptModal } from '@/features/pos/ReceiptModal';
+import { printThermalReceipt } from '@/features/pos/receiptPdf';
 import {
   downloadReportCsv,
   downloadReportExcel,
@@ -105,6 +106,7 @@ export const SalesInvoicesPage: React.FC = () => {
   const [receiptInvoice, setReceiptInvoice] = useState<Invoice | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState<boolean>(false);
   const [isLoadingReceipt, setIsLoadingReceipt] = useState<boolean>(false);
+  const [printingInvoiceId, setPrintingInvoiceId] = useState<string | null>(null);
 
   // Refund / Void Modal State
   const [refundTargetInvoice, setRefundTargetInvoice] = useState<Invoice | null>(null);
@@ -172,6 +174,21 @@ export const SalesInvoicesPage: React.FC = () => {
   };
 
   // Open Receipt Modal
+  const handleQuickPrint = async (invoiceId: string) => {
+    setPrintingInvoiceId(invoiceId);
+    try {
+      const fullInvoice = await salonService.getInvoice(invoiceId);
+      if (fullInvoice) {
+        const branch = allBranches.find((b) => b.id === fullInvoice.branchId) || null;
+        printThermalReceipt(fullInvoice, branch);
+      }
+    } catch (err) {
+      console.error('Failed to load invoice receipt details for print:', err);
+    } finally {
+      setPrintingInvoiceId(null);
+    }
+  };
+
   const handleOpenReceipt = async (invoiceId: string) => {
     setIsLoadingReceipt(true);
     try {
@@ -747,6 +764,19 @@ export const SalesInvoicesPage: React.FC = () => {
                         {/* 17. Action */}
                         <td className="py-3.5 px-4 text-center whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickPrint(row.id)}
+                              disabled={printingInvoiceId === row.id}
+                              className="p-1 rounded text-slate-500 hover:text-[#0047AB] hover:bg-blue-50 transition-colors cursor-pointer"
+                              title="Print thermal receipt (80mm)"
+                            >
+                              {printingInvoiceId === row.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-[#0047AB]" />
+                              ) : (
+                                <Printer className="w-4 h-4" />
+                              )}
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleOpenReceipt(row.id)}

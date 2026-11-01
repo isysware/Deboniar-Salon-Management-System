@@ -2475,7 +2475,7 @@ class MockSalonService implements SalonServiceContract {
             const sName = (c.serviceName || c.serviceCode || 'Service').trim();
             const sCode = nextReference(store, 'SRV');
             const newSrv: ServiceItem = {
-              id: generateId(),
+              id: `srv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
               branchId: effectiveBranchId,
               code: sCode,
               name: sName,
@@ -7674,7 +7674,9 @@ class MockSalonService implements SalonServiceContract {
     startDate: string,
     endDate: string,
     staffId?: string,
-    actor?: User
+    actor?: User,
+    staffIds?: string[],
+    compensationType?: string
   ): Promise<CommissionRun> {
     const authenticatedActor = this.getAuthenticatedActor(actor);
     if (authenticatedActor.role === 'ACCOUNTANT') {
@@ -7707,7 +7709,8 @@ class MockSalonService implements SalonServiceContract {
         s.branchId === branchId &&
         s.isActive &&
         isCompensationEligibleForCommission(s.compensationType) &&
-        (!staffId || s.id === staffId)
+        (!compensationType || compensationType === 'ALL' || s.compensationType === compensationType) &&
+        (staffIds && staffIds.length > 0 ? staffIds.includes(s.id) : (!staffId || staffId === 'ALL' || s.id === staffId))
     );
 
     const statements: CommissionStatementRecord[] = [];

@@ -94,12 +94,20 @@ export function allocatePackageRevenue(
     return { allocatedComponents: [], totalAllocated: 0, isBalanced: true };
   }
 
-  const totalPercentage = components.reduce((sum, c) => sum + (c.allocationPercentage || 0), 0);
+  const rawSum = components.reduce((sum, c) => sum + (c.allocationPercentage || 0), 0);
+  const needsEqualSplit = rawSum <= 0.001;
+  const equalShare = components.length > 0 ? 100 / components.length : 100;
+  const normalizedComponents = components.map((c) => ({
+    ...c,
+    allocationPercentage: needsEqualSplit ? equalShare : (c.allocationPercentage || 0),
+  }));
+
+  const totalPercentage = normalizedComponents.reduce((sum, c) => sum + (c.allocationPercentage || 0), 0);
   const isBalanced = Math.abs(totalPercentage - 100) < 0.001;
 
   // Initial distribution
   let distributedSum = 0;
-  const allocated = components.map((comp, idx) => {
+  const allocated = normalizedComponents.map((comp, idx) => {
     // For every component except the last, allocate proportional rounded amount
     const pct = comp.allocationPercentage || 0;
     const amount = roundCurrency(cleanPrice * (pct / 100));

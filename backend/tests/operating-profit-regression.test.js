@@ -111,3 +111,39 @@ describe('Operating Profit recognition', () => {
     expect(report.kpis.operatingMarginPercent).toBe(80);
   });
 });
+
+describe('Refund and void reconciliation', () => {
+  function installSale(lifecycle, reversed, saleDate = '2026-10-05') {
+    for (const model of Object.values(db)) model.findMany.mockResolvedValue([]);
+    const refund = { id: 'refund', refundNumber: 'RFD-1', refundDate: new Date('2026-10-10'), netReversed: reversed, taxReversed: reversed * 0.16, tipReversed: 0, cashOut: reversed * 1.16, method: 'CASH', invoice: { id: 'sale', branchId: actor.branchId }, lines: [{ lineId: 'line', net: reversed, tax: reversed * 0.16 }] };
+    const sale = { id: 'sale', invoiceNumber: 'INV-1', date: new Date(saleDate), branchId: actor.branchId, lifecycle, status: 'PAID', subtotal: 1000, discount: 0, netSales: 1000, tax: 160, total: 1160, tip: 0, amountPaid: 1160 - refund.cashOut, amountDue: 0, payments: [{ amount: 1160, billAmountAllocated: 1160, kind: 'POS', method: 'CASH', date: new Date(saleDate) }], refunds: [refund], lines: [{ id: 'line', type: 'SERVICE', name: 'Service', quantity: 1, unitPrice: 1000, netSales: 1000, tax: 160, taxRate: 0.16, total: 1160, discountAllocated: 0 }] };
+    const matches = (date, range) => !range || (date >= range.gte && date <= range.lte);
+    db.invoice.findMany.mockImplementation(async ({ where }) => matches(sale.date, where.date) && where.lifecycle?.not !== lifecycle ? [sale] : []);
+    db.invoiceRefund.findMany.mockImplementation(async ({ where }) => matches(refund.refundDate, where.refundDate) ? [refund] : []);
+  }
+
+  it.each([['REFUNDED', 1000, 0], ['VOIDED', 1000, 0], ['PARTIALLY_REFUNDED', 400, 600]])('%s reverses sale and tax exactly once', async (lifecycle, reversed, expected) => {
+    installSale(lifecycle, reversed);
+    const { salesInvoicesReport, taxReport } = await import('../src/modules/reports/reports.service.js');
+    const income = await incomeExpenseReport(actor, query);
+    const profit = await operatingProfitReport(actor, query);
+    const sales = await salesInvoicesReport(actor, query);
+    const tax = await taxReport(actor, query);
+    expect(income.kpis.totalRecognizedIncome).toBe(expected);
+    expect(profit.kpis.totalNetRevenue).toBe(expected);
+    expect(sales.kpis.netSales).toBe(expected);
+    expect(sales.kpis.netTaxLiability).toBe(expected * 0.16);
+    expect(sales.kpis.totalCashCollected).toBeCloseTo(expected * 1.16);
+    expect(tax.kpis.netTaxLiability).toBe(expected * 0.16);
+  });
+
+  it('retains historical sale and recognizes a later void on its reversal date', async () => {
+    installSale('VOIDED', 1000, '2026-09-05');
+    const { taxReport } = await import('../src/modules/reports/reports.service.js');
+    const earlier = { ...query, from: '2026-09-01', to: '2026-09-30' };
+    expect((await incomeExpenseReport(actor, earlier)).kpis.totalRecognizedIncome).toBe(1000);
+    expect((await taxReport(actor, earlier)).kpis.netTaxLiability).toBe(160);
+    expect((await incomeExpenseReport(actor, query)).kpis.totalRecognizedIncome).toBe(-1000);
+    expect((await taxReport(actor, query)).kpis.netTaxLiability).toBe(-160);
+  });
+});

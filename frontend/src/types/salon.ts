@@ -193,6 +193,8 @@ export interface PackageComponent {
   quantity: number;
   allocationPercentage: number; // 0 to 100, must total 100%
   unitPrice: number;
+  durationMinutes?: number;
+  isActive?: boolean;
 }
 
 export interface PackageItem {

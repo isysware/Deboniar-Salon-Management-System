@@ -69,9 +69,15 @@ const runDTO = async (tx, id) => {
 };
 
 /** Build one statement per eligible staff member from unconsumed events in the window. */
-export const buildStatements = async (tx, branchId, startDate, endDate, staffId, payrollStaffIds) => {
-  const staffRows = await tx.staff.findMany({ where: { branchId, ...(payrollStaffIds ? { id: { in: payrollStaffIds } } : { isActive: true, ...(staffId ? { id: staffId } : {}) }) }, orderBy: { employeeCode: 'asc' } });
-  const eligible = payrollStaffIds ? staffRows : staffRows.filter((s) => isCompensationEligibleForCommission(s.compensationType));
+export const buildStatements = async (tx, branchId, startDate, endDate, staffId, payrollStaffIds, staffIds, compensationType) => {
+  const targetStaffIds = payrollStaffIds || (staffIds && staffIds.length > 0 ? staffIds : (staffId && staffId !== 'ALL' ? [staffId] : null));
+  const where = {
+    branchId,
+    ...(targetStaffIds ? { id: { in: targetStaffIds } } : { isActive: true }),
+    ...(compensationType && compensationType !== 'ALL' ? { compensationType } : {})
+  };
+  const staffRows = await tx.staff.findMany({ where, orderBy: { employeeCode: 'asc' } });
+  const eligible = targetStaffIds ? staffRows : staffRows.filter((s) => isCompensationEligibleForCommission(s.compensationType));
   const events = await tx.commissionEvent.findMany({
     where: { branchId, consumedByRunId: null, eventDate: { gte: dateOnly(startDate), lte: dateOnly(endDate) }, staffId: { in: eligible.map((s) => s.id) } },
     orderBy: [{ eventDate: 'asc' }, { createdAt: 'asc' }],
@@ -130,13 +136,13 @@ export const listRuns = async (actor, { branchId } = {}) => {
 
 // ── Preview / finalize / cancel ──────────────────────────────────────────────
 
-export const generatePreview = async (actor, { branchId: requested, startDate, endDate, staffId }) => {
+export const generatePreview = async (actor, { branchId: requested, startDate, endDate, staffId, staffIds, compensationType }) => {
   noAccountant(actor);
   if (startDate > endDate) throw badRequest('INVALID_RANGE', 'Start date must be on or before end date.');
   const branchId = resolveWriteBranch(actor, requested, 'Access Denied: Cannot generate commission for another branch.');
   return prisma.$transaction(async (tx) => {
     await lockCommissionBranch(tx, branchId);
-    const built = await buildStatements(tx, branchId, startDate, endDate, staffId);
+    const built = await buildStatements(tx, branchId, startDate, endDate, staffId, null, staffIds, compensationType);
     await tx.commissionRun.deleteMany({ where: { branchId, status: 'DRAFT', startDate: dateOnly(startDate), endDate: dateOnly(endDate) } });
     const run = await tx.commissionRun.create({
       data: {
@@ -162,7 +168,9 @@ export const finalizeRun = async (actor, runId) => {
 
     // Serialise finalizations per branch so two runs can never consume the same events.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`commission:${draft.branchId}`}::text))`;
-    const built = await buildStatements(tx, draft.branchId, ymd(draft.startDate), ymd(draft.endDate));
+    const draftStatements = await tx.commissionStatement.findMany({ where: { runId }, select: { staffId: true } });
+    const draftStaffIds = draftStatements.map((s) => s.staffId);
+    const built = await buildStatements(tx, draft.branchId, ymd(draft.startDate), ymd(draft.endDate), null, null, draftStaffIds.length > 0 ? draftStaffIds : null);
     const branch = await tx.branch.findUnique({ where: { id: draft.branchId } });
     const year = Number(ymd(draft.startDate).slice(0, 4));
     await tx.commissionStatement.deleteMany({ where: { runId } });

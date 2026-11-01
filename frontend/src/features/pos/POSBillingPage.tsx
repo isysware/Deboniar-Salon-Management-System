@@ -528,9 +528,15 @@ export const POSBillingPage: React.FC = () => {
 
   // Check if a package contains any deactivated service
   const getPackageValidity = (pkg: PackageItem) => {
+    if (!pkg.components || pkg.components.length === 0) {
+      return { isValid: false, reason: `Package '${pkg.name}' has no component services configured.` };
+    }
     for (const comp of pkg.components) {
+      if (comp.isActive === false) {
+        return { isValid: false, reason: `Component '${comp.serviceName || 'Service'}' is deactivated` };
+      }
       const srv = services.find((s) => s.id === comp.serviceId);
-      if (!srv || !srv.isActive) {
+      if (srv && !srv.isActive) {
         return { isValid: false, reason: `Component '${comp.serviceName}' is deactivated` };
       }
     }
@@ -723,7 +729,10 @@ export const POSBillingPage: React.FC = () => {
   // Add Package to Cart
   const handleAddPackageToCart = (pkg: PackageItem) => {
     const validity = getPackageValidity(pkg);
-    if (!validity.isValid) return;
+    if (!validity.isValid) {
+      toast.warning(validity.reason || 'Cannot add this package to sale card.');
+      return;
+    }
 
     setCart((prev) => {
       const existingIndex = prev.findIndex(

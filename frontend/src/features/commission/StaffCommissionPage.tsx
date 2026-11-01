@@ -30,6 +30,8 @@ import {
   Lock,
   Layers,
   Sparkles,
+  Banknote,
+  Building2,
 } from 'lucide-react';
 import { roundCurrency } from '../../lib/taxCalculations';
 import { AccessDeniedView } from '../scaffold/AccessDeniedView';
@@ -61,9 +63,12 @@ export const StaffCommissionPage: React.FC = () => {
   const [selectedBranchId, setSelectedBranchId] = useState<string>(
     user.role === 'SUPER_ADMIN' ? (activeBranchId === 'ALL' ? (allBranches[0]?.id || '') : activeBranchId) : (user.branchId || '')
   );
+  const [periodType, setPeriodType] = useState<'MONTHLY' | 'DAILY' | 'CUSTOM_RANGE'>('MONTHLY');
+  const [selectedMonth, setSelectedMonth] = useState<string>(todayStr.slice(0, 7));
   const [startDate, setStartDate] = useState<string>(monthStartStr);
   const [endDate, setEndDate] = useState<string>(todayStr);
-  const [staffFilter, setStaffFilter] = useState<string>('ALL');
+  const [compTypeFilter, setCompTypeFilter] = useState<'ALL' | 'MONTHLY_PLUS_COMMISSION' | 'DAILY_PLUS_COMMISSION' | 'COMMISSION_ONLY'>('ALL');
+  const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
   // Active Draft Run (preview currently being inspected / generated)
@@ -184,20 +189,77 @@ export const StaffCommissionPage: React.FC = () => {
     );
   }, [cashDrawers, effectiveBranchId, user.id]);
 
-  // Generate Draft Preview
-  const handleGeneratePreview = async () => {
-    if (user.role === 'SUPER_ADMIN' && !generationScope.validate()) return;
+  // Sync date range with selected period
+  useEffect(() => {
+    if (periodType === 'MONTHLY') {
+      const [y, mo] = selectedMonth.split('-').map(Number);
+      const lastDay = new Date(y, mo, 0).getDate();
+      setStartDate(`${selectedMonth}-01`);
+      setEndDate(`${selectedMonth}-${String(lastDay).padStart(2, '0')}`);
+    } else if (periodType === 'DAILY') {
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+    }
+  }, [periodType, selectedMonth, todayStr]);
+
+  // Active commission-eligible staff in this branch filtered by chosen compensation type
+  const eligibleBranchStaff = useMemo(() => {
+    return staffList.filter((s: StaffMember) => {
+      if (s.branchId !== effectiveBranchId || !s.isActive) return false;
+      const isCommissionEligible =
+        s.compensationType === 'MONTHLY_PLUS_COMMISSION' ||
+        s.compensationType === 'DAILY_PLUS_COMMISSION' ||
+        s.compensationType === 'COMMISSION_ONLY';
+      if (!isCommissionEligible) return false;
+      if (compTypeFilter !== 'ALL' && s.compensationType !== compTypeFilter) return false;
+      return true;
+    });
+  }, [staffList, effectiveBranchId, compTypeFilter]);
+
+  // Set of staff IDs who already have finalized statements in the selected period window
+  const generatedStaffIdSet = useMemo(() => {
+    const set = new Set<string>();
+    commissionRuns
+      .filter((r) => r.status !== 'CANCELLED' && r.status !== 'DRAFT')
+      .filter((r) => {
+        if (periodType === 'DAILY') return r.startDate === startDate && r.endDate === startDate;
+        if (periodType === 'MONTHLY') return r.startDate === startDate || r.startDate?.startsWith(selectedMonth);
+        return r.startDate === startDate && r.endDate === endDate;
+      })
+      .forEach((r) => {
+        r.statements?.forEach((st) => set.add(st.staffId));
+      });
+    return set;
+  }, [commissionRuns, periodType, selectedMonth, startDate, endDate]);
+
+  // Auto-select eligible ungenerated staff by default
+  useEffect(() => {
+    const ungenerated = eligibleBranchStaff.filter((s: StaffMember) => !generatedStaffIdSet.has(s.id)).map((s: StaffMember) => s.id);
+    setSelectedStaffIds(ungenerated.length > 0 ? ungenerated : eligibleBranchStaff.map((s: StaffMember) => s.id));
+  }, [eligibleBranchStaff, generatedStaffIdSet]);
+
+  // Generate Draft Preview for filtered/selected staff
+  const handleGeneratePreview = async (overrideStaffIds?: string[]) => {
+    if (user.role === 'SUPER_ADMIN' && !effectiveBranchId) {
+      toast.error('Please select a branch first.');
+      return;
+    }
+    const staffIdsToUse = overrideStaffIds || (selectedStaffIds.length > 0 ? selectedStaffIds : eligibleBranchStaff.map((s: StaffMember) => s.id));
+    if (staffIdsToUse.length === 0) {
+      toast.error('Please select at least one staff member to generate commission.');
+      return;
+    }
     try {
       setActionLoading(true);
       setFeedback(null);
       const preview = await salonService.generateCommissionPreview(
-        user.role === 'SUPER_ADMIN' ? generationScope.branchId : effectiveBranchId,
+        user.role === 'SUPER_ADMIN' ? (generationScope.branchId || effectiveBranchId) : effectiveBranchId,
         startDate,
         endDate,
-        user.role === 'SUPER_ADMIN'
-          ? (generationStaffId !== 'ALL' ? generationStaffId : undefined)
-          : (staffFilter !== 'ALL' ? staffFilter : undefined),
-        user
+        staffIdsToUse.length === 1 ? staffIdsToUse[0] : undefined,
+        user,
+        staffIdsToUse,
+        compTypeFilter !== 'ALL' ? compTypeFilter : undefined
       );
       setActiveDraft(preview);
       setShowGenerateForm(false);
@@ -502,21 +564,32 @@ export const StaffCommissionPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-        <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm">
-          <Filter className="w-4 h-4 text-purple-600" />
-          <span>Commission Run Filters & Date Range</span>
+      {/* Period, Compensation Type & Staff Selection Filter */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
+              <Filter className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">Generate Commission & Staff Filter</h2>
+              <p className="text-xs text-slate-400">Select period type, compensation category, and staff members to calculate and generate commission.</p>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 1. Branch Selector (Super Admin) */}
           {user.role === 'SUPER_ADMIN' && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">Branch</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Branch</label>
               <select
                 value={selectedBranchId}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="w-full text-sm border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500"
+                onChange={(e) => {
+                  setSelectedBranchId(e.target.value);
+                  setSelectedStaffIds([]);
+                }}
+                className="w-full text-sm border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 font-medium text-slate-800"
               >
                 {allBranches.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -527,72 +600,255 @@ export const StaffCommissionPage: React.FC = () => {
             </div>
           )}
 
+          {/* 2. Period Type: Monthly vs Daily vs Custom */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Commission Month</label>
-            <input
-              type="month"
-              value={startDate.slice(0, 7) === endDate.slice(0, 7) ? startDate.slice(0, 7) : ''}
-              onChange={(e) => {
-                // Monthly commission run: 1st .. last day of the chosen month.
-                const m = e.target.value;
-                if (!m) return;
-                const [y, mo] = m.split('-').map(Number);
-                setStartDate(`${m}-01`);
-                setEndDate(`${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, '0')}`);
-              }}
-              className="w-full text-sm border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500"
-            />
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Period Type</label>
+            <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  setPeriodType('MONTHLY');
+                  const [y, m] = (selectedMonth || todayStr.slice(0, 7)).split('-').map(Number);
+                  setStartDate(`${selectedMonth}-01`);
+                  setEndDate(`${selectedMonth}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`);
+                }}
+                className={`py-1.5 rounded-lg transition-all ${periodType === 'MONTHLY' ? 'bg-white text-purple-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPeriodType('DAILY');
+                  setStartDate(todayStr);
+                  setEndDate(todayStr);
+                }}
+                className={`py-1.5 rounded-lg transition-all ${periodType === 'DAILY' ? 'bg-white text-purple-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                Daily
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodType('CUSTOM_RANGE')}
+                className={`py-1.5 rounded-lg transition-all ${periodType === 'CUSTOM_RANGE' ? 'bg-white text-purple-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+              >
+                Custom
+              </button>
+            </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full text-sm border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
+          {/* 3. Date Selectors based on Period Type */}
+          {periodType === 'MONTHLY' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Commission Month</label>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => {
+                  const m = e.target.value;
+                  if (!m) return;
+                  setSelectedMonth(m);
+                  const [y, mo] = m.split('-').map(Number);
+                  setStartDate(`${m}-01`);
+                  setEndDate(`${m}-${String(new Date(y, mo, 0).getDate()).padStart(2, '0')}`);
+                }}
+                className="w-full text-sm border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 font-medium text-slate-800"
+              />
+            </div>
+          )}
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full text-sm border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
+          {periodType === 'DAILY' && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setEndDate(e.target.value);
+                }}
+                className="w-full text-sm border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 font-medium text-slate-800"
+              />
+            </div>
+          )}
 
+          {periodType === 'CUSTOM_RANGE' && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">From</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full text-sm border-slate-200 rounded-xl px-2.5 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 font-medium text-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">To</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full text-sm border-slate-200 rounded-xl px-2.5 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 font-medium text-slate-800"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* 4. Compensation Category Filter */}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Employee</label>
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">Compensation Type</label>
             <select
-              value={staffFilter}
-              onChange={(e) => setStaffFilter(e.target.value)}
-              className="w-full text-sm border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500"
+              value={compTypeFilter}
+              onChange={(e) => {
+                setCompTypeFilter(e.target.value as any);
+                setSelectedStaffIds([]);
+              }}
+              className="w-full text-sm border-slate-200 rounded-xl px-3 py-2.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 font-medium text-slate-800"
             >
-              <option value="ALL">All Eligible Staff</option>
-              {staffList
-                .filter(
-                  (s) =>
-                    s.compensationType === 'MONTHLY_PLUS_COMMISSION' ||
-                    s.compensationType === 'DAILY_PLUS_COMMISSION' ||
-                    s.compensationType === 'COMMISSION_ONLY'
-                )
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.commissionRate}%)
-                  </option>
-                ))}
+              <option value="ALL">All Commission Staff</option>
+              <option value="MONTHLY_PLUS_COMMISSION">Monthly + Commission</option>
+              <option value="DAILY_PLUS_COMMISSION">Daily + Commission</option>
+              <option value="COMMISSION_ONLY">Commission Only</option>
             </select>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">Run Status</label>
+        {/* Staff Selection Panel */}
+        <div className="pt-3 border-t border-slate-100 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-slate-700">Staff Selection ({eligibleBranchStaff.length} eligible):</span>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-semibold">
+                {selectedStaffIds.length} Selected
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedStaffIds(eligibleBranchStaff.map((s) => s.id))}
+                className="px-3 py-1 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Select All
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStaffIds(eligibleBranchStaff.filter((s) => !generatedStaffIdSet.has(s.id)).map((s) => s.id))}
+                className="px-3 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Select Ungenerated ({eligibleBranchStaff.filter((s) => !generatedStaffIdSet.has(s.id)).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStaffIds([])}
+                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* Staff Checkboxes Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-[220px] overflow-y-auto pr-1">
+            {eligibleBranchStaff.length === 0 ? (
+              <div className="col-span-full p-6 text-center text-slate-400 text-xs">
+                No eligible staff found for the selected branch & compensation type filter.
+              </div>
+            ) : (
+              eligibleBranchStaff.map((s) => {
+                const isSelected = selectedStaffIds.includes(s.id);
+                const isGenerated = generatedStaffIdSet.has(s.id);
+
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      setSelectedStaffIds((prev) =>
+                        prev.includes(s.id) ? prev.filter((id) => id !== s.id) : [...prev, s.id]
+                      );
+                    }}
+                    className={`p-3 rounded-xl border flex items-center justify-between text-xs cursor-pointer transition-all select-none ${
+                      isSelected
+                        ? 'bg-purple-50/70 border-purple-300 shadow-2xs'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer pointer-events-none"
+                      />
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-800 truncate">
+                          {s.name} <span className="text-purple-600 font-bold">({s.commissionRate}%)</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {s.employeeCode || `EMP-${s.id.slice(-3).toUpperCase()}`} • {
+                            s.compensationType === 'MONTHLY_PLUS_COMMISSION'
+                              ? 'Monthly + Com'
+                              : s.compensationType === 'DAILY_PLUS_COMMISSION'
+                              ? 'Daily + Com'
+                              : 'Com Only'
+                          }
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      {isGenerated ? (
+                        <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md whitespace-nowrap">
+                          Generated
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-medium rounded-md whitespace-nowrap">
+                          Not Generated
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Action Bar */}
+          <div className="pt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100">
+            <div className="text-xs text-slate-500">
+              Selected Period: <strong className="text-slate-700">{startDate}</strong> to <strong className="text-slate-700">{endDate}</strong>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleGeneratePreview()}
+              disabled={actionLoading || selectedStaffIds.length === 0}
+              className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-xs sm:text-sm shadow-sm transition-all cursor-pointer"
+            >
+              <Award className="w-4 h-4" />
+              Generate Commission ({selectedStaffIds.length} Staff)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* MANAGE COMMISSION RUNS SECTION */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-purple-50 text-purple-600 rounded-xl">
+              <Award className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Manage Commission Runs ({displayRuns.length})</h2>
+              <p className="text-xs text-slate-400">Review finalized commission statements, payment disbursements, and audit logs.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500">Filter Status:</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full text-sm border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500"
+              className="text-xs border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-purple-500 font-medium text-slate-700"
             >
               <option value="ALL">All Statuses</option>
               <option value="FINALIZED">Finalized</option>
@@ -706,7 +962,7 @@ export const StaffCommissionPage: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {run.statements
-                      .filter((s) => (staffFilter === 'ALL' ? true : s.staffId === staffFilter))
+                      .filter((s) => (compTypeFilter === 'ALL' ? true : s.compensationType === compTypeFilter))
                       .map((st) => (
                         <tr key={st.id} className="hover:bg-slate-50/50 transition-colors">
                           <td className="py-3 px-4">
@@ -1073,24 +1329,26 @@ export const StaffCommissionPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setPaymentForm({ ...paymentForm, method: 'CASH' })}
-                    className={`p-3 rounded-xl border text-center font-medium transition-all ${
+                    className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-medium transition-all cursor-pointer ${
                       paymentForm.method === 'CASH'
-                        ? 'border-purple-600 bg-purple-50/50 text-purple-700 ring-2 ring-purple-500'
-                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                        ? 'border-purple-600 bg-purple-50/60 text-purple-700 ring-2 ring-purple-500 shadow-2xs'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    💵 Cash (Open Drawer)
+                    <Banknote className="w-4 h-4 text-emerald-600" />
+                    <span>Cash (Open Drawer)</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPaymentForm({ ...paymentForm, method: 'ONLINE' })}
-                    className={`p-3 rounded-xl border text-center font-medium transition-all ${
+                    className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-medium transition-all cursor-pointer ${
                       paymentForm.method === 'ONLINE'
-                        ? 'border-purple-600 bg-purple-50/50 text-purple-700 ring-2 ring-purple-500'
-                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                        ? 'border-purple-600 bg-purple-50/60 text-purple-700 ring-2 ring-purple-500 shadow-2xs'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    🏦 Bank / Online Account
+                    <Building2 className="w-4 h-4 text-blue-600" />
+                    <span>Bank / Online Account</span>
                   </button>
                 </div>
               </div>

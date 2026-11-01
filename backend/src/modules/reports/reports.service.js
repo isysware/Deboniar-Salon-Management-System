@@ -428,19 +428,17 @@ export const salesInvoicesReport = async (actor, q = {}) => {
         onlineAccountsMap.set(accName, existing);
       }
     }
-    // Deduct actually paid refunds from cash & online collection totals
-    if (inv.lifecycle !== 'VOIDED') {
-      for (const r of inv.refunds) {
-        const cashOut = toDec(r.cashOut || 0);
-        if (cashOut.greaterThan(0)) {
-          if (r.method === 'CASH') {
-            totalCashCollected = totalCashCollected.minus(cashOut);
-          } else {
-            totalOnlineCollected = totalOnlineCollected.minus(cashOut);
-            for (const acc of onlineAccountsMap.values()) {
-              if (r.accountId && acc.accountId === r.accountId) {
-                acc.amount = acc.amount.minus(cashOut);
-              }
+    // Void payouts also reverse the original receipts included above.
+    for (const r of inv.refunds) {
+      const cashOut = toDec(r.cashOut || 0);
+      if (cashOut.greaterThan(0)) {
+        if (r.method === 'CASH') {
+          totalCashCollected = totalCashCollected.minus(cashOut);
+        } else {
+          totalOnlineCollected = totalOnlineCollected.minus(cashOut);
+          for (const acc of onlineAccountsMap.values()) {
+            if (r.accountId && acc.accountId === r.accountId) {
+              acc.amount = acc.amount.minus(cashOut);
             }
           }
         }
@@ -498,13 +496,11 @@ export const salesInvoicesReport = async (actor, q = {}) => {
       if (p.method === 'CASH') rowCash = rowCash.plus(toDec(p.amount));
       else rowOnline = rowOnline.plus(toDec(p.amount));
     }
-    if (inv.lifecycle !== 'VOIDED') {
-      for (const r of inv.refunds) {
-        const cashOut = toDec(r.cashOut || 0);
-        if (cashOut.greaterThan(0)) {
-          if (r.method === 'CASH') rowCash = max0(rowCash.minus(cashOut));
-          else rowOnline = max0(rowOnline.minus(cashOut));
-        }
+    for (const r of inv.refunds) {
+      const cashOut = toDec(r.cashOut || 0);
+      if (cashOut.greaterThan(0)) {
+        if (r.method === 'CASH') rowCash = max0(rowCash.minus(cashOut));
+        else rowOnline = max0(rowOnline.minus(cashOut));
       }
     }
 
@@ -555,7 +551,8 @@ export const salesInvoicesReport = async (actor, q = {}) => {
     };
   });
 
-  const netTaxLiability = totalTaxCharged.minus(totalTaxReversed);
+  // totalTaxCharged already includes the refund deduction above.
+  const netTaxLiability = totalTaxCharged;
 
   const kpis = {
     totalInvoices: invoices.length,
@@ -617,11 +614,10 @@ export const incomeExpenseReport = async (actor, query = {}) => {
     prisma.branch.findMany({ select: { id: true, name: true, city: true } }),
     prisma.staff.findMany({ select: { id: true, name: true, employeeCode: true, branchId: true } }),
     prisma.user.findMany({ select: { id: true, name: true, role: true, branchId: true } }),
-    // 1. Valid non-voided POS Invoices
+    // Original sales stay posted; dated refund/void events reverse them exactly once.
     prisma.invoice.findMany({
       where: {
         date: dateRange,
-        lifecycle: { not: 'VOIDED' },
         ...branchFilter,
         ...(actor.role === 'ACCOUNTANT' ? { processedByUserId: actor.id } : {}),
       },
@@ -761,7 +757,6 @@ export const incomeExpenseReport = async (actor, query = {}) => {
           where: {
             invoice: {
               date: dateRange,
-              lifecycle: { not: 'VOIDED' },
               ...branchFilter,
               ...(actor.role === 'ACCOUNTANT' ? { processedByUserId: actor.id } : {}),
             },
@@ -1267,7 +1262,6 @@ const computePeriodMetrics = async (branchId, fromStr, toStr, fromDate, toDate) 
     prisma.invoice.findMany({
       where: {
         date: dateRange,
-        lifecycle: { not: 'VOIDED' },
         ...branchFilter,
       },
       select: {
@@ -3435,7 +3429,6 @@ export const taxReport = async (actor, query = {}) => {
     prisma.invoice.findMany({
       where: {
         date: dateRange,
-        lifecycle: { not: 'VOIDED' },
         tax: { gt: 0 },
         ...branchFilter,
         ...(actor.role === 'ACCOUNTANT' ? { processedByUserId: actor.id } : {}),

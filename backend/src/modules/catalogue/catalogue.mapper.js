@@ -40,6 +40,7 @@ export const toPackageDTO = (p) => ({
       allocationPercentage: num(c.allocationPercentage),
       unitPrice:            num(c.service?.price),
       durationMinutes:      c.service?.durationMinutes,
+      isActive:             c.service ? c.service.isActive : true,
     })),
   taxTreatment:      p.taxTreatment,
   specificTaxRuleId: opt(p.specificTaxRuleId),

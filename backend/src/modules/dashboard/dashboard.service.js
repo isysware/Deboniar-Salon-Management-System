@@ -31,7 +31,7 @@ export const computeBranchMetrics = async (branchIds, date, { id, name, code }) 
   const live = { ...scope, lifecycle: { not: 'VOIDED' } };
 
   const [sales, refunds, dues, payments, expenses, reversals, onDuty, apptCount, drawers, accounts] = await Promise.all([
-    prisma.invoice.aggregate({ where: { ...live, date: day }, _sum: { subtotal: true, discount: true, netSales: true, tax: true }, _count: true }),
+    prisma.invoice.aggregate({ where: { ...scope, date: day }, _sum: { subtotal: true, discount: true, netSales: true, tax: true }, _count: true }),
     prisma.invoiceRefund.findMany({ where: { refundDate: day, invoice: scope }, select: { netReversed: true, taxReversed: true, tipReversed: true, cashOut: true, method: true } }),
     prisma.invoice.aggregate({ where: { ...live, amountDue: { gt: 0 } }, _sum: { amountDue: true } }),
     prisma.invoicePayment.groupBy({ by: ['method'], where: { ...scope, date: day }, _sum: { amount: true, tipAmountAllocated: true } }),
@@ -70,8 +70,8 @@ export const computeBranchMetrics = async (branchIds, date, { id, name, code }) 
     branchId: id, branchName: name, branchCode: code,
     grossSales: n(sumOf(sales, 'subtotal')),
     totalDiscounts: n(sumOf(sales, 'discount')),
-    netSales: n(max0(sumOf(sales, 'netSales').minus(netReversed))),
-    taxBilled: n(max0(sumOf(sales, 'tax').minus(taxReversed))),
+    netSales: n(sumOf(sales, 'netSales').minus(netReversed)),
+    taxBilled: n(sumOf(sales, 'tax').minus(taxReversed)),
     tipsCollected: n(tipsCollected),
     actualCollections: n(actualCollections),
     cashCollected: n(cashCollected),
@@ -115,7 +115,7 @@ const computeRevenueTrend = async (scope) => {
     months.map(async (m) => {
       const [invAgg, expAgg, payAgg, refAgg] = await Promise.all([
         prisma.invoice.aggregate({
-          where: { ...scope, lifecycle: { not: 'VOIDED' }, date: { gte: m.start, lte: m.end } },
+          where: { ...scope, date: { gte: m.start, lte: m.end } },
           _sum: { netSales: true },
         }),
         prisma.expense.aggregate({
@@ -133,7 +133,7 @@ const computeRevenueTrend = async (scope) => {
       ]);
       return {
         label: m.label,
-        revenue: n(max0(toDec(invAgg._sum?.netSales ?? 0).minus(toDec(refAgg._sum?.netReversed ?? 0)))),
+        revenue: n(toDec(invAgg._sum?.netSales ?? 0).minus(toDec(refAgg._sum?.netReversed ?? 0))),
         expenses: n(expAgg._sum?.amount ?? 0),
         collections: n(max0(toDec(payAgg._sum?.amount ?? 0).minus(toDec(refAgg._sum?.cashOut ?? 0)))),
       };
