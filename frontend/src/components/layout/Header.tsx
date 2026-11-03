@@ -22,6 +22,8 @@ import {
   PanelLeft,
   Calendar,
   Bell,
+  Clock,
+  RotateCcw,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -37,8 +39,45 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobileDrawer,
   breadcrumbs,
 }) => {
-  const { user, activeBranchId, allBranches, logout, demoDate, setDemoDate } = useAuth();
+  const { user, activeBranchId, allBranches, logout, demoDate, isDateOverridden, setDemoDate, resetDemoDate } = useAuth();
   const { navigate } = useRouter();
+
+  const [liveTime, setLiveTime] = useState<string>(() => {
+    return new Intl.DateTimeFormat('en-PK', {
+      timeZone: 'Asia/Karachi',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(new Date());
+  });
+
+  useEffect(() => {
+    const update = () => {
+      setLiveTime(
+        new Intl.DateTimeFormat('en-PK', {
+          timeZone: 'Asia/Karachi',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        }).format(new Date())
+      );
+    };
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatDisplayDate = (ymdStr: string) => {
+    if (!ymdStr) return '';
+    const parts = ymdStr.split('-').map(Number);
+    if (parts.length !== 3 || !parts[0] || !parts[1] || !parts[2]) return ymdStr;
+    const [y, m, d] = parts;
+    const dt = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    }).format(dt);
+  };
 
   const [notifications, setNotifications] = useState<Array<{
     id: string;
@@ -92,6 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
 
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const canManageDate = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN';
 
   const roleMeta: Record<string, { label: string; variant: 'primary' | 'secondary' | 'success' | 'warning' | 'default' }> = {
     SUPER_ADMIN: { label: 'Super Admin', variant: 'primary' },
@@ -155,21 +195,67 @@ export const Header: React.FC<HeaderProps> = ({
 
       {/* RIGHT ZONE: Branch Selector + Demo Date + User Profile Menu */}
       <div className="flex flex-wrap sm:flex-nowrap w-full sm:w-auto shrink-0 items-center justify-between gap-2 sm:gap-3">
-        {/* SHARED DEMO DATE SELECTOR */}
-        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50/80 hover:bg-slate-100 transition-colors text-xs">
-          <Calendar className="w-3.5 h-3.5 text-[#2254E1] shrink-0" />
-          <span className="hidden xl:inline text-[11px] font-medium text-slate-500">Date:</span>
-          <input
-            type="date"
-            value={demoDate}
-            onChange={(e) => {
-              if (e.target.value) {
-                setDemoDate(e.target.value);
-              }
-            }}
-            className="text-xs font-semibold text-slate-800 bg-transparent border-none p-0 focus:outline-none focus:ring-0 cursor-pointer w-[115px]"
-            title="Operational System Date (changes trigger immediate dashboard and financial reconciliation)"
-          />
+        {/* OPERATIONAL DATE & LIVE CLOCK */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <div
+            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
+              isDateOverridden
+                ? 'border-amber-400 bg-amber-50/90 text-amber-900 shadow-xs ring-1 ring-amber-300'
+                : 'border-slate-200 bg-slate-50/80 hover:bg-slate-100/80 text-slate-700'
+            }`}
+            title={
+              isDateOverridden
+                ? 'Date override is active. Click Reset to Today to return to live real date.'
+                : 'Operational System Date & Live Karachi Time'
+            }
+          >
+            <div className="flex items-center gap-1.5">
+              <Calendar className={`w-3.5 h-3.5 shrink-0 ${isDateOverridden ? 'text-amber-600' : 'text-[#2254E1]'}`} />
+              {canManageDate ? (
+                <input
+                  type="date"
+                  value={demoDate}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setDemoDate(e.target.value);
+                    }
+                  }}
+                  className="text-xs font-bold text-slate-800 bg-transparent border-none p-0 focus:outline-none focus:ring-0 cursor-pointer w-[115px]"
+                  title="Click to change operational date"
+                />
+              ) : (
+                <span className="font-semibold text-slate-800 text-xs">
+                  {formatDisplayDate(demoDate)}
+                </span>
+              )}
+            </div>
+
+            {/* Live Time */}
+            <div className="hidden sm:flex items-center gap-1 pl-1.5 border-l border-slate-200 text-slate-500 font-medium text-[11px]">
+              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+              <span>{liveTime}</span>
+            </div>
+
+            {/* Simulated Badge if date is overridden */}
+            {isDateOverridden && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-200 text-amber-900 animate-pulse">
+                Simulated
+              </span>
+            )}
+          </div>
+
+          {/* Reset button if date is overridden */}
+          {isDateOverridden && canManageDate && (
+            <button
+              type="button"
+              onClick={() => resetDemoDate()}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-emerald-500 bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+              title="Reset date back to real live today"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-white" />
+              <span>Reset to Today</span>
+            </button>
+          )}
         </div>
 
 

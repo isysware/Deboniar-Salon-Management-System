@@ -89,7 +89,7 @@ export function evaluateEarlyExit(
   let checkOutMin = parseTimeToMinutes(checkOutTimeStr);
   let endMin = parseTimeToMinutes(scheduledEndTimeStr);
 
-  if (isOvernightShift) {
+  if (isOvernightShift || endMin <= 6 * 60 || (checkOutMin <= 6 * 60 && endMin <= 12 * 60)) {
     // If shift spans midnight (e.g. 21:00 to 05:00), endMin is next day
     if (checkOutMin < 12 * 60) checkOutMin += 24 * 60;
     if (endMin < 12 * 60) endMin += 24 * 60;

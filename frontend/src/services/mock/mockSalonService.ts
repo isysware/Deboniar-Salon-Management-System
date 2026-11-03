@@ -2947,6 +2947,16 @@ class MockSalonService implements SalonServiceContract {
     mockStorage.setSystemDate(date);
   }
 
+  async resetSystemDate(): Promise<void> {
+    mockStorage.setSystemDate(new Date().toISOString().slice(0, 10));
+  }
+
+  async getSystemDateInfo(): Promise<{ date: string; realDate: string; isOverridden: boolean; time: string }> {
+    const today = new Date().toISOString().slice(0, 10);
+    const d = mockStorage.getSystemDate();
+    return { date: d, realDate: today, isOverridden: d !== today, time: '12:00' };
+  }
+
   // --- PHASE 3A: POS BILLING & COLLECTIONS ---
 
   async getInvoices(
@@ -6010,8 +6020,9 @@ class MockSalonService implements SalonServiceContract {
     const inMin = parseTimeToMinutes(input.checkIn);
     if (input.checkOut) {
       const outMin = parseTimeToMinutes(input.checkOut);
-      if (!isOvernight && outMin < inMin) {
-        throw new Error('Check-out time cannot be earlier than check-in time unless marked as an overnight shift.');
+      const isMidnightCrossing = inMin >= 11 * 60 && outMin <= 7 * 60;
+      if (!isOvernight && outMin < inMin && !isMidnightCrossing) {
+        throw new Error('Check-out time cannot be earlier than check-in time.');
       }
     }
 
@@ -6113,8 +6124,9 @@ class MockSalonService implements SalonServiceContract {
     const inMin = parseTimeToMinutes(input.checkIn);
     if (input.checkOut) {
       const outMin = parseTimeToMinutes(input.checkOut);
-      if (!isOvernight && outMin < inMin) {
-        throw new Error('Check-out time cannot be earlier than check-in time unless marked as an overnight shift.');
+      const isMidnightCrossing = inMin >= 11 * 60 && outMin <= 7 * 60;
+      if (!isOvernight && outMin < inMin && !isMidnightCrossing) {
+        throw new Error('Check-out time cannot be earlier than check-in time.');
       }
     }
 
@@ -6574,7 +6586,8 @@ class MockSalonService implements SalonServiceContract {
       const inMin = parseTimeToMinutes(row.checkIn);
       if (row.checkOut) {
         const outMin = parseTimeToMinutes(row.checkOut);
-        if (!isOvernight && outMin < inMin) {
+        const isMidnightCrossing = inMin >= 11 * 60 && outMin <= 7 * 60;
+        if (!isOvernight && outMin < inMin && !isMidnightCrossing) {
           rejectedRows++;
           details.push({
             ...row,
